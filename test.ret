@@ -1,0 +1,15 @@
+
+name: string = "Gareth"
+age: int = 23
+
+if age < 0 or age > 200 {
+    print("Invalid age")
+} else if age < 18 {
+    print("You are a minor")
+} else {
+    print("You are an adult")
+}
+
+fn hello(name: string) -> string {
+    return "Hello, " + name + "!"
+}
