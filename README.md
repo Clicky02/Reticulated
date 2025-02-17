@@ -51,7 +51,7 @@ primary -> IDENTIFIER | INTEGER | FLOAT | STRING | BOOL | NONE | "(" expression 
 parameter_values -> (expression ("," expression)*)?
 ```
 
-## Roadmap
+## Project Goals
 
 ### MVP 
 
@@ -61,9 +61,13 @@ parameter_values -> (expression ("," expression)*)?
 - [x] Implement parser
 - [ ] Integrate with LLVM for code generation
 
-### Additional Goals 
+### Additional Functionality 
 
 - [ ] Implement type checker
 - [ ] Basic Standard Library Features
 - [ ] Write documentation
 - [ ] Create test suite
+
+### Project Cleanup 
+
+- [ ] Better error reporting and handling.
