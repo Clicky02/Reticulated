@@ -4,9 +4,9 @@ Reticulated is a statically typed, compiled programming language with a syntax s
 
 ## Features
 
-- **Statically Typed**: All variables and expressions have a type that is known at compile time.
-- **Python-like Syntax**: The language syntax is inspired by Python, making it easy to read and write.
-- **Multi-Platform**: By using LLVM, the compiler can generate code for multiple platforms.
+-   **Statically Typed**: All variables and expressions have a type that is known at compile time.
+-   **Python-like Syntax**: The language syntax is inspired by Python, making it easy to read and write.
+-   **Multi-Platform**: By using LLVM, the compiler can generate code for multiple platforms.
 
 ## Example Code
 
@@ -42,9 +42,9 @@ block -> "{" statement* "}"
 expression -> equality
 logical -> equality ( ("or" | "and") equality )*
 equality -> comparison ( ("!=" | "==") comparison )*
-comparison ->  term ( ( ">" | ">=" | "<" | "<=" ) term )* 
-term -> factor ( ( "-" | "+" ) factor )* 
-factor -> unary ( ( "/" | "*" | "%" ) unary )* 
+comparison ->  term ( ( ">" | ">=" | "<" | "<=" ) term )*
+term -> factor ( ( "-" | "+" ) factor )*
+factor -> unary ( ( "/" | "*" | "%" ) unary )*
 unary -> ( "!" | "-" ) unary | invoke
 invoke -> (invoke | primary)  "(" parameter_values ")"
 primary -> IDENTIFIER | INTEGER | FLOAT | STRING | BOOL | NONE | "(" expression ")"
@@ -53,21 +53,34 @@ parameter_values -> (expression ("," expression)*)?
 
 ## Project Goals
 
-### MVP 
+In no specific order:
 
-- [x] Define initial grammar
-- [x] Create example code
-- [x] Implement lexer
-- [x] Implement parser
-- [ ] Integrate with LLVM for code generation
+### MVP
 
-### Additional Functionality 
+-   [x] Define initial grammar
+-   [x] Create example code
+-   [x] Implement lexer
+-   [x] Implement parser
+-   [ ] Integrate with LLVM for code generation
 
-- [ ] Implement type checker
-- [ ] Basic Standard Library Features
-- [ ] Write documentation
-- [ ] Create test suite
+### Additional Functionality
 
-### Project Cleanup 
+-   [ ] More language features
+    -   [ ] While loop
+    -   [ ] For Loop
+    -   [ ] First-class functions
+    -   [ ] Structs/classes
+    -   [ ] Imports
+    -   [ ] List Comprehensions
+    -   [ ] Dictionay Comprehensions
+    -   [ ] Lambda functions
+    -   [ ] Contexts
+-   [ ] Implement type checker
+-   [ ] Basic Standard Library Features
+-   [ ] Write documentation
+-   [ ] Create test suite
 
-- [ ] Better error reporting and handling.
+### Project Cleanup
+
+-   [ ] Better error reporting and handling.
+-   [ ] Add more comprehensive command line argument support
