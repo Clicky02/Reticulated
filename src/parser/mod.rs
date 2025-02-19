@@ -293,6 +293,8 @@ impl<R: ReadTokens> Parser<R> {
     }
 
     fn primary(&mut self) -> Result<Expression, String> {
+        // primary -> IDENTIFIER | LITERAL | "(" expression ")"
+
         let Some(next) = self.tokens.advance() else {
             return Err("Unexpectedly reached end of input.".into());
         };
