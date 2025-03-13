@@ -19,6 +19,7 @@ pub trait ReadTokens: Read<Token> {
         }
     }
 
+    /// Without advancing, returns whether the next token matches the given token
     fn check(&mut self, kind: TokenKind) -> bool {
         let next_token = self.try_peek_next();
         if let Some(next_token) = next_token {

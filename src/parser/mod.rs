@@ -45,7 +45,8 @@ impl<R: ReadTokens> Parser<R> {
     }
 
     fn statement(&mut self) -> Result<Statement, String> {
-        // statement -> (declaration | assignment | function_declaration | expression | if_statement | return_statement) "\n"
+        // statement -> (declaration | assignment | function_declaration | extern_function
+        // | if_statement | return_statement | expression) "\n"
 
         let statement = match self.tokens.peek_next().kind {
             TokenKind::Identifier(_) => match self.tokens.peek(1).kind {
@@ -53,7 +54,8 @@ impl<R: ReadTokens> Parser<R> {
                 TokenKind::Operator(OperatorKind::Assign) => self.assignment()?,
                 _ => Statement::Expression(self.expression()?),
             },
-            TokenKind::Keyword(KeywordKind::Fn) => self.fn_declaration()?,
+            TokenKind::Keyword(KeywordKind::Def) => self.fn_declaration()?,
+            TokenKind::Keyword(KeywordKind::Extern) => self.extern_fn_declaration()?,
             TokenKind::Keyword(KeywordKind::If) => self.if_statement()?,
             TokenKind::Keyword(KeywordKind::Return) => self.return_statement()?,
             _ => Statement::Expression(self.expression()?),
@@ -100,7 +102,7 @@ impl<R: ReadTokens> Parser<R> {
     fn fn_declaration(&mut self) -> Result<Statement, String> {
         // function_declaration -> "fn" IDENTIFIER "(" parameters ")" "->" IDENTIFIER block
 
-        self.tokens.expect_keyword(KeywordKind::Fn)?;
+        self.tokens.expect_keyword(KeywordKind::Def)?;
 
         let identifier = self.tokens.expect_identifier()?;
 
@@ -123,16 +125,56 @@ impl<R: ReadTokens> Parser<R> {
         })
     }
 
+    fn extern_fn_declaration(&mut self) -> Result<Statement, String> {
+        // extern_function -> "extern" "def" IDENTIFIER "(" extern_parameters ")" "->" IDENTIFIER
+
+        self.tokens.expect_keyword(KeywordKind::Extern)?;
+        self.tokens.expect_keyword(KeywordKind::Def)?;
+
+        let identifier = self.tokens.expect_identifier()?;
+
+        self.tokens.expect(TokenKind::OpenParenthesis)?;
+
+        let parameters = self.fn_parameters()?;
+
+        self.tokens.expect(TokenKind::CloseParenthesis)?;
+        self.tokens.expect(TokenKind::Arrow)?;
+
+        let return_identifier = self.tokens.expect_identifier()?;
+
+        Ok(Statement::ExternFunctionDeclaration {
+            identifier,
+            parameters,
+            return_identifier,
+        })
+    }
+
     fn fn_parameters(&mut self) -> Result<Vec<FuncParameter>, String> {
-        // parameters -> (IDENTIFIER ":" IDENTIFIER ("," IDENTIFIER ":" IDENTIFIER)*)?
+        // parameters -> (IDENTIFIER ":" IDENTIFIER ("," IDENTIFIER ":" IDENTIFIER)* ("," "*")?)?
 
         let mut params = Vec::new();
 
-        while self.tokens.peek_next().kind != TokenKind::CloseParenthesis {
+        while !self.tokens.check(TokenKind::CloseParenthesis) {
+            let var_args = if self
+                .tokens
+                .check(TokenKind::Operator(OperatorKind::Multiply))
+            {
+                self.tokens.advance();
+                true
+            } else {
+                false
+            };
+
             let identifier = self.tokens.expect_identifier()?;
             self.tokens.expect(TokenKind::Colon)?;
             let type_identifier = self.tokens.expect_identifier()?;
-            params.push(FuncParameter::new(identifier, type_identifier));
+            params.push(FuncParameter::new(identifier, type_identifier, var_args));
+
+            if self.tokens.check(TokenKind::Comma) {
+                self.tokens.advance();
+            } else {
+                break;
+            }
         }
 
         Ok(params)
@@ -209,7 +251,7 @@ impl<R: ReadTokens> Parser<R> {
 
         while let Some(op) = self.match_logical_op() {
             let right = self.equality()?;
-            expr = Expression::Logical(Box::new(expr), op, Box::new(right));
+            expr = Expression::Binary(Box::new(expr), op, Box::new(right));
         }
 
         Ok(expr)
@@ -220,7 +262,7 @@ impl<R: ReadTokens> Parser<R> {
 
         while let Some(op) = self.match_equality_op() {
             let right = self.comparison()?;
-            expr = Expression::Equality(Box::new(expr), op, Box::new(right));
+            expr = Expression::Binary(Box::new(expr), op, Box::new(right));
         }
 
         Ok(expr)
@@ -231,7 +273,7 @@ impl<R: ReadTokens> Parser<R> {
 
         while let Some(op) = self.match_comparison_op() {
             let right = self.term()?;
-            expr = Expression::Comparison(Box::new(expr), op, Box::new(right));
+            expr = Expression::Binary(Box::new(expr), op, Box::new(right));
         }
 
         Ok(expr)
@@ -242,7 +284,7 @@ impl<R: ReadTokens> Parser<R> {
 
         while let Some(op) = self.match_term_op() {
             let right = self.factor()?;
-            expr = Expression::Term(Box::new(expr), op, Box::new(right));
+            expr = Expression::Binary(Box::new(expr), op, Box::new(right));
         }
 
         Ok(expr)
@@ -253,7 +295,7 @@ impl<R: ReadTokens> Parser<R> {
 
         while let Some(op) = self.match_factor_op() {
             let right = self.unary()?;
-            expr = Expression::Factor(Box::new(expr), op, Box::new(right));
+            expr = Expression::Binary(Box::new(expr), op, Box::new(right));
         }
 
         Ok(expr)
@@ -275,13 +317,20 @@ impl<R: ReadTokens> Parser<R> {
 
         let mut expr = self.primary()?;
 
-        while self.tokens.check(TokenKind::OpenParenthesis) {
+        while self.tokens.check(TokenKind::OpenParenthesis) { // allow multiple invokations in a row
             self.tokens.advance(); // Eat open paranthesis
 
             let mut args = Vec::new();
 
+            let mut first = true;
             while self.tokens.peek_next().kind != TokenKind::CloseParenthesis {
+                if !first {
+                    self.tokens.expect(TokenKind::Comma)?;
+                }
+
                 args.push(self.expression()?);
+
+                first = false;
             }
 
             self.tokens.expect(TokenKind::CloseParenthesis)?;
@@ -328,83 +377,83 @@ impl<R: ReadTokens> Parser<R> {
         }
     }
 
-    fn match_logical_op(&mut self) -> Option<LogicalOp> {
+    fn match_logical_op(&mut self) -> Option<BinaryOp> {
         match self.tokens.peek_next().kind {
             TokenKind::Operator(OperatorKind::And) => {
                 self.tokens.advance();
-                Some(LogicalOp::And)
+                Some(BinaryOp::And)
             }
             TokenKind::Operator(OperatorKind::Or) => {
                 self.tokens.advance();
-                Some(LogicalOp::Or)
+                Some(BinaryOp::Or)
             }
             _ => None,
         }
     }
 
-    fn match_equality_op(&mut self) -> Option<EqualityOp> {
+    fn match_equality_op(&mut self) -> Option<BinaryOp> {
         match self.tokens.peek_next().kind {
             TokenKind::Operator(OperatorKind::NotEqual) => {
                 self.tokens.advance();
-                Some(EqualityOp::NotEqual)
+                Some(BinaryOp::NotEqual)
             }
             TokenKind::Operator(OperatorKind::Equal) => {
                 self.tokens.advance();
-                Some(EqualityOp::Equal)
+                Some(BinaryOp::Equal)
             }
             _ => None,
         }
     }
 
-    fn match_comparison_op(&mut self) -> Option<ComparisonOp> {
+    fn match_comparison_op(&mut self) -> Option<BinaryOp> {
         match self.tokens.peek_next().kind {
             TokenKind::Operator(OperatorKind::GreaterThan) => {
                 self.tokens.advance();
-                Some(ComparisonOp::Greater)
+                Some(BinaryOp::Greater)
             }
             TokenKind::Operator(OperatorKind::GreaterThanOrEqual) => {
                 self.tokens.advance();
-                Some(ComparisonOp::GreaterEqual)
+                Some(BinaryOp::GreaterEqual)
             }
             TokenKind::Operator(OperatorKind::LessThan) => {
                 self.tokens.advance();
-                Some(ComparisonOp::Less)
+                Some(BinaryOp::Less)
             }
             TokenKind::Operator(OperatorKind::LessThanOrEqual) => {
                 self.tokens.advance();
-                Some(ComparisonOp::LessEqual)
+                Some(BinaryOp::LessEqual)
             }
             _ => None,
         }
     }
 
-    fn match_term_op(&mut self) -> Option<TermOp> {
+    fn match_term_op(&mut self) -> Option<BinaryOp> {
         match self.tokens.peek_next().kind {
             TokenKind::Operator(OperatorKind::Add) => {
                 self.tokens.advance();
-                Some(TermOp::Add)
+                Some(BinaryOp::Add)
             }
             TokenKind::Operator(OperatorKind::Subtract) => {
                 self.tokens.advance();
-                Some(TermOp::Subtract)
+                Some(BinaryOp::Subtract)
             }
             _ => None,
         }
     }
 
-    fn match_factor_op(&mut self) -> Option<FactorOp> {
+    fn match_factor_op(&mut self) -> Option<BinaryOp> {
         match self.tokens.peek_next().kind {
             TokenKind::Operator(OperatorKind::Multiply) => {
                 self.tokens.advance();
-                Some(FactorOp::Multiply)
+                Some(BinaryOp::Multiply)
             }
             TokenKind::Operator(OperatorKind::Divide) => {
                 self.tokens.advance();
-                Some(FactorOp::Divide)
+                Some(BinaryOp::Divide)
             }
             TokenKind::Operator(OperatorKind::Modulo) => {
                 self.tokens.advance();
-                Some(FactorOp::Modulo)
+                Some(BinaryOp::Modulo)
             }
             _ => None,
         }

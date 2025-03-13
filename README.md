@@ -31,13 +31,15 @@ fn hello(name: string) -> string {
 
 ```plaintext
 program -> statement*
-statement -> (declaration | assignment | function_declaration | if_statement | return_statement | expression) "\n"
+statement -> (declaration | assignment | function_declaration | extern_function | if_statement | return_statement | expression) "\n"
 declaration -> IDENTIFIER ":" IDENTIFIER "=" expression
 assignment -> IDENTIFIER "=" expression
-function_declaration -> "fn" IDENTIFIER "(" parameters ")" "->" "string" block
+function_declaration -> "def" IDENTIFIER "(" parameters ")" "->" IDENTIFIER block
+extern_function -> "extern" "def" IDENTIFIER "(" parameters ")" "->" IDENTIFIER
 if_statement -> "if" expression block ("else" "if" expression block)* ("else" block )?
 return_statement -> "return" expression
 block -> "{" statement* "}"
+parameters -> (IDENTIFIER ":" IDENTIFIER ("," "*"? IDENTIFIER ":" IDENTIFIER)*)?
 
 expression -> equality
 logical -> equality ( ("or" | "and") equality )*
@@ -66,6 +68,7 @@ In no specific order:
 ### Additional Functionality
 
 -   [ ] More language features
+    -   [ ] Comments
     -   [ ] While loop
     -   [ ] For Loop
     -   [ ] First-class functions

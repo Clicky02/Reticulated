@@ -17,6 +17,11 @@ pub enum Statement {
         return_identifier: String,
         body: Vec<Statement>,
     },
+    ExternFunctionDeclaration {
+        identifier: String,
+        parameters: Vec<FuncParameter>,
+        return_identifier: String,
+    },
     Expression(Expression),
     IfStatement {
         condition: Expression,
@@ -33,13 +38,15 @@ pub enum Statement {
 pub struct FuncParameter {
     pub identifier: String,
     pub type_identifier: String,
+    pub var_args: bool,
 }
 
 impl FuncParameter {
-    pub fn new(identifier: String, type_identifier: String) -> Self {
+    pub fn new(identifier: String, type_identifier: String, var_args: bool) -> Self {
         Self {
             identifier,
             type_identifier,
+            var_args,
         }
     }
 }

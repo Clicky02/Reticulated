@@ -87,7 +87,8 @@ impl<R: ReadSource> Lexer<R> {
         match &text[..] {
             "if" => TokenKind::Keyword(KeywordKind::If),
             "else" => TokenKind::Keyword(KeywordKind::Else),
-            "fn" => TokenKind::Keyword(KeywordKind::Fn),
+            "def" => TokenKind::Keyword(KeywordKind::Def),
+            "extern" => TokenKind::Keyword(KeywordKind::Extern),
             "for" => TokenKind::Keyword(KeywordKind::For),
             "while" => TokenKind::Keyword(KeywordKind::While),
             "return" => TokenKind::Keyword(KeywordKind::Return),

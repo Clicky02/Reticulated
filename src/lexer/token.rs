@@ -147,6 +147,7 @@ pub enum KeywordKind {
     Else,
     For,
     While,
-    Fn,
+    Def,
     Return,
+    Extern,
 }

@@ -1,43 +1,32 @@
 #[derive(Debug)]
 pub enum Expression {
-    Logical(Box<Expression>, LogicalOp, Box<Expression>),
-    Equality(Box<Expression>, EqualityOp, Box<Expression>),
-    Comparison(Box<Expression>, ComparisonOp, Box<Expression>),
-    Term(Box<Expression>, TermOp, Box<Expression>),
-    Factor(Box<Expression>, FactorOp, Box<Expression>),
+    Binary(Box<Expression>, BinaryOp, Box<Expression>),
     Unary(UnaryOp, Box<Expression>),
     Invoke(Box<Expression>, Vec<Expression>),
     Primary(Primary),
 }
 
 #[derive(Debug)]
-pub enum LogicalOp {
+pub enum BinaryOp {
+    // Logical
     And,
     Or,
-}
 
-#[derive(Debug)]
-pub enum EqualityOp {
+    // Equality
     NotEqual,
     Equal,
-}
 
-#[derive(Debug)]
-pub enum ComparisonOp {
+    // Comparison
     Greater,
     GreaterEqual,
     Less,
     LessEqual,
-}
 
-#[derive(Debug)]
-pub enum TermOp {
+    // Term
     Add,
     Subtract,
-}
 
-#[derive(Debug)]
-pub enum FactorOp {
+    // Factor
     Multiply,
     Divide,
     Modulo,

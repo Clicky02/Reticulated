@@ -1,10 +1,14 @@
+use codegen::CodeGen;
+use inkwell::context::Context;
+use inkwell::module::Module;
 use lexer::{Lexer, Token};
 use parser::Parser;
 use read_buffer::ReadBuffer;
 use source::SourceCursor;
-use std::env;
 use std::fs::File;
 use std::io::Read;
+use std::process::Command;
+use std::{env, fs};
 
 pub mod codegen;
 pub mod lexer;
@@ -36,8 +40,58 @@ fn main() {
     }
 
     let mut parser = Parser::new(ReadBuffer::new(tokens));
+    let program = parser.parse().unwrap();
     println!("\n---------Statements----------");
-    for st in parser.parse().unwrap() {
+    for st in &program {
         println!("{:?}", st);
     }
+
+    let context = Context::create();
+    let mut gen = CodeGen::new(&context);
+    gen.gen_code_for(program);
+    println!("\n---------Generated LLVM IR----------");
+    println!("{}", gen.module.to_string());
+
+    // Save to output.ll
+    fs::write("output.ll", &gen.module.to_string()).expect("Unable to write file");
+
+    // Compile the LLVM IR to an executable
+    compile_to_executable();
+}
+
+fn compile_to_executable() {
+    // Compile LLVM IR to an object file
+    let llc_output = Command::new("llc")
+        .arg("output.ll")
+        .arg("-filetype=obj")
+        .arg("-o")
+        .arg("output.o")
+        .output()
+        .expect("Failed to execute llc");
+
+    if !llc_output.status.success() {
+        eprintln!(
+            "Error in llc: {}",
+            String::from_utf8_lossy(&llc_output.stderr)
+        );
+        return;
+    }
+
+    // Link the object file to create an executable
+    let clang_output = Command::new("clang")
+        .arg("output.o")
+        .arg("-o")
+        .arg("output")
+        .output()
+        .expect("Failed to execute clang");
+
+    if !clang_output.status.success() {
+        eprintln!(
+            "Error in clang: {}",
+            String::from_utf8_lossy(&clang_output.stderr)
+        );
+        return;
+    }
+
+    println!("Executable 'output' generated successfully!");
 }
