@@ -116,8 +116,6 @@ impl<'ctx> Environment<'ctx> {
     ) -> Result<FunctionId, GenError> {
         let fn_name = self.create_fn_name(ident, owner, param_types);
 
-        dbg!(&fn_name);
-
         self.fn_ids
             .get(&fn_name)
             .copied()

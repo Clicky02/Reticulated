@@ -44,9 +44,9 @@ impl BinaryOp {
             BinaryOp::Less => todo!(),
             BinaryOp::LessEqual => todo!(),
             BinaryOp::Add => "__add__",
-            BinaryOp::Subtract => todo!(),
-            BinaryOp::Multiply => todo!(),
-            BinaryOp::Divide => todo!(),
+            BinaryOp::Subtract => "__sub__",
+            BinaryOp::Multiply => "__mul__",
+            BinaryOp::Divide => "__truediv__",
             BinaryOp::Modulo => todo!(),
         }
     }
