@@ -1,6 +1,5 @@
 use codegen::CodeGen;
 use inkwell::context::Context;
-use inkwell::module::Module;
 use lexer::{Lexer, Token};
 use parser::Parser;
 use read_buffer::ReadBuffer;
@@ -48,24 +47,59 @@ fn main() {
 
     let context = Context::create();
     let mut gen = CodeGen::new(&context);
-    gen.gen_code_for(program);
+    let module = gen.gen_code_for(program);
     println!("\n---------Generated LLVM IR----------");
-    println!("{}", gen.module.to_string());
+    println!("{}", module.to_string());
 
     // Save to output.ll
-    fs::write("output.ll", &gen.module.to_string()).expect("Unable to write file");
+
+    fs::create_dir_all("./out").expect("Could not create out directory");
+    fs::write("./out/output.ll", &module.to_string()).expect("Unable to write file");
 
     // Compile the LLVM IR to an executable
     compile_to_executable();
 }
 
 fn compile_to_executable() {
-    // Compile LLVM IR to an object file
+    // Compile LLVM IR to an optimized LLVM IR file
+    let opt_output = Command::new("opt")
+        .arg("-O3") // Optimization level 3
+        .arg("./out/output.ll")
+        .arg("-o")
+        .arg("./out/output_opt.ll")
+        .output()
+        .expect("Failed to execute opt");
+
+    if !opt_output.status.success() {
+        eprintln!(
+            "Error in opt: {}",
+            String::from_utf8_lossy(&opt_output.stderr)
+        );
+        return;
+    }
+
+    // Convert the optimized LLVM IR to human-readable assembly
+    let llvm_dis_output = Command::new("llvm-dis")
+        .arg("./out/output_opt.ll")
+        .arg("-o")
+        .arg("./out/output_opt.s")
+        .output()
+        .expect("Failed to execute llvm-dis");
+
+    if !llvm_dis_output.status.success() {
+        eprintln!(
+            "Error in llvm-dis: {}",
+            String::from_utf8_lossy(&llvm_dis_output.stderr)
+        );
+        return;
+    }
+
+    // Compile optimized LLVM IR to an object file
     let llc_output = Command::new("llc")
-        .arg("output.ll")
+        .arg("./out/output_opt.ll")
         .arg("-filetype=obj")
         .arg("-o")
-        .arg("output.o")
+        .arg("./out/output.o")
         .output()
         .expect("Failed to execute llc");
 
@@ -77,11 +111,12 @@ fn compile_to_executable() {
         return;
     }
 
-    // Link the object file to create an executable
+    // Link the object file to create an optimized executable
     let clang_output = Command::new("clang")
-        .arg("output.o")
+        .arg("./out/output.o")
+        .arg("-O3") // Optimization level 3
         .arg("-o")
-        .arg("output")
+        .arg("./out/output")
         .output()
         .expect("Failed to execute clang");
 

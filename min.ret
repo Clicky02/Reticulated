@@ -1,11 +1,1 @@
-extern def printf(val: str, *vals: any) -> int
-
-age: int = 23
-test: int = age + 23
-
-printf("test %d - ", test)
-printf("test %d - ", test * 2)
-printf("test %d - ", test / 2)
-printf("test %d - ", test + 2)
-printf("test %d - ", test - 2)
-printf("test %d - ", test % 2)
+age: int = 5 + 3

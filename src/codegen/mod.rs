@@ -1,25 +1,30 @@
-use std::collections::HashMap;
-
-use env::Environment;
+use env::{
+    id::{TypeId, BOOL_ID, FLOAT_ID, INT_ID},
+    type_def::TypeDef,
+    Environment,
+};
+use err::GenError;
 use inkwell::{
     builder::Builder,
     context::Context,
-    module::{Linkage, Module},
-    types::{AnyType, BasicMetadataTypeEnum, BasicType, BasicTypeEnum},
-    values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
-    AddressSpace,
+    module::Module,
+    types::StructType,
+    values::{BasicValueEnum, PointerValue},
 };
-use to_meta::{ToMetaTypeEnum, ToMetaValueEnum};
 
 pub mod env;
+pub mod err;
 pub mod to_meta;
 
-use crate::parser::{BinaryOp, Expression, FuncParameter, Primary, Statement};
+use crate::parser::{BinaryOp, Expression, Primary, Statement};
+
+const INT_NAME: &str = "int";
+const FLOAT_NAME: &str = "float";
+const BOOL_NAME: &str = "bool";
 
 // TODO: Not pub
 pub struct CodeGen<'ctx> {
     pub ctx: &'ctx Context,
-    pub module: Module<'ctx>,
     pub builder: Builder<'ctx>,
 }
 
@@ -27,120 +32,198 @@ impl<'ctx> CodeGen<'ctx> {
     pub fn new(ctx: &'ctx Context) -> Self {
         Self {
             ctx,
-            module: ctx.create_module("main"),
             builder: ctx.create_builder(),
         }
     }
 
-    pub fn gen_code_for(&mut self, program: Vec<Statement>) {
-        let fn_type = self.ctx.i32_type().fn_type(&[], false);
-        let main_fn = self.module.add_function("main", fn_type, None);
+    fn setup_primitive_types(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
+        let int_struct = self.ctx.opaque_struct_type(INT_NAME);
+        int_struct.set_body(&[self.ctx.i64_type().into()], false);
+        env.reserve_type_id(INT_ID, INT_NAME, int_struct)?;
 
-        let entry = self.ctx.append_basic_block(main_fn, "entry");
+        let int_add_int_fn =
+            env.create_func(Some(INT_ID), "__add__", &[INT_ID, INT_ID], INT_ID, false)?;
 
-        self.builder.position_at_end(entry);
+        let int_add_int_entry = self.ctx.append_basic_block(int_add_int_fn, "entry");
+        self.builder.position_at_end(int_add_int_entry);
 
-        let mut env = Environment::new(main_fn);
+        let left_ptr = int_add_int_fn
+            .get_first_param()
+            .unwrap()
+            .into_pointer_value();
+        let left = self
+            .builder
+            .build_struct_gep(int_struct, left_ptr, 0, "left_ptr")?;
+        let left = self
+            .builder
+            .build_load(int_struct.get_field_type_at_index(0).unwrap(), left, "left")?
+            .into_int_value();
 
-        for statement in program {
-            self.compile_statement(&statement, &mut env);
-        }
+        let right_ptr = int_add_int_fn
+            .get_nth_param(1)
+            .unwrap()
+            .into_pointer_value();
+        let right = self
+            .builder
+            .build_struct_gep(int_struct, right_ptr, 0, "right_ptr")?;
+        let right = self
+            .builder
+            .build_load(
+                int_struct.get_field_type_at_index(0).unwrap(),
+                right,
+                "right",
+            )?
+            .into_int_value();
 
-        self.builder
-            .build_return(Some(&self.ctx.i32_type().const_int(0, false)))
-            .unwrap();
+        let result_val = self.builder.build_int_add(left, right, "result_val")?;
+        self.builder.build_aggregate_return(&[result_val.into()])?;
+
+        let float_struct = self.ctx.opaque_struct_type(FLOAT_NAME);
+        float_struct.set_body(&[self.ctx.f64_type().into()], false);
+        env.reserve_type_id(FLOAT_ID, FLOAT_NAME, float_struct)?;
+
+        let bool_struct = self.ctx.opaque_struct_type(BOOL_NAME);
+        bool_struct.set_body(&[self.ctx.bool_type().into()], false);
+        env.reserve_type_id(BOOL_ID, BOOL_NAME, bool_struct)?;
+
+        Ok(())
     }
 
-    pub fn compile_statement(&mut self, statement: &Statement, env: &mut env::Environment<'ctx>) {
+    pub fn gen_code_for(&mut self, program: Vec<Statement>) -> Module<'ctx> {
+        let module = self.ctx.create_module("main");
+
+        let mut env = Environment::new(module);
+        self.setup_primitive_types(&mut env).unwrap();
+
+        env.push_scope();
+
+        let fn_type = self.ctx.i64_type().fn_type(&[], false);
+        let main_fn = env.module.add_function("main", fn_type, None);
+        let entry = self.ctx.append_basic_block(main_fn, "entry");
+        self.builder.position_at_end(entry);
+
+        for statement in program {
+            self.compile_statement(&statement, &mut env).unwrap();
+        }
+
+        env.pop_scope();
+
+        self.builder
+            .build_return(Some(&self.ctx.i64_type().const_int(0, false)))
+            .unwrap();
+
+        return env.module;
+    }
+
+    pub fn compile_statement(
+        &mut self,
+        statement: &Statement,
+        env: &mut env::Environment<'ctx>,
+    ) -> Result<(), GenError> {
         match statement {
             Statement::Declaration {
                 identifier,
                 type_identifier,
                 expression,
             } => {
-                let var_type = self.ident_to_type(type_identifier, env);
-                let var_ptr = self.builder.build_alloca(var_type, identifier).unwrap();
+                let var_type_id = env.find_type(type_identifier)?;
+                let (expr_ptr, expr_type_id) = self.compile_expression(expression, env)?;
 
-                let value = self.compile_expression(expression, env);
-                self.builder.build_store(var_ptr, value).unwrap();
-                env.insert_var(identifier.clone(), var_ptr, var_type);
+                assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
+
+                expr_ptr.set_name(identifier);
+                env.insert_var(identifier.clone(), expr_ptr, expr_type_id);
             }
             Statement::Assignment {
                 identifier,
                 expression,
             } => {
-                let (var_ptr, _var_type) = env.get_var(identifier).unwrap();
-                let value = self.compile_expression(expression, env); // TODO: Type check?
-                self.builder.build_store(var_ptr, value).unwrap();
+                let (var_ptr, var_type_id) = env.get_var(identifier)?;
+                let (expr_ptr, expr_type_id) = self.compile_expression(expression, env)?;
+
+                assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
+
+                let expr_type = env.get_type(expr_type_id);
+                let expr_val = self.builder.build_load(expr_type.ink(), expr_ptr, "tmp")?;
+
+                self.builder.build_store(var_ptr, expr_val)?;
             }
             Statement::FunctionDeclaration {
-                identifier,
-                parameters,
-                return_identifier,
-                body,
+                identifier: _,
+                parameters: _,
+                return_identifier: _,
+                body: _,
             } => todo!(),
             Statement::ExternFunctionDeclaration {
-                identifier,
-                parameters,
-                return_identifier,
+                identifier: _,
+                parameters: _,
+                return_identifier: _,
             } => {
-                let (param_types, is_var_args) = self.params_to_types(parameters, env);
-                let fn_type = self
-                    .ident_to_type(&return_identifier, env)
-                    .fn_type(&param_types, is_var_args);
-                self.module
-                    .add_function(&identifier, fn_type, Some(Linkage::External));
+                // let (param_types, is_var_args) = self.params_to_types(parameters, env);
+                // let fn_type = self
+                //     .ident_to_type(&return_identifier, env)
+                //     .fn_type(&param_types, is_var_args);
+                // self.module
+                //     .add_function(&identifier, fn_type, Some(Linkage::External));
+                todo!()
             }
             Statement::Expression(expression) => {
-                self.compile_expression(expression, env);
+                self.compile_expression(expression, env)?;
             }
             Statement::IfStatement {
-                condition,
-                then_branch,
-                else_if_branches,
-                else_branch,
+                condition: _,
+                then_branch: _,
+                else_if_branches: _,
+                else_branch: _,
             } => todo!(),
-            Statement::ReturnStatement { expression } => todo!(),
-        }
+            Statement::ReturnStatement { expression: _ } => todo!(),
+        };
+
+        Ok(())
     }
 
     pub fn compile_expression(
         &mut self,
         expression: &Expression,
         env: &mut env::Environment<'ctx>,
-    ) -> BasicValueEnum<'ctx> {
-        match expression {
-            Expression::Binary(left, op, right) => self.compile_binary(left, op, right, env),
-            Expression::Unary(op, expr) => todo!(),
-            Expression::Invoke(callee, args) => self.compile_invoke(callee, args, env),
-            Expression::Primary(primary) => self.compile_primary(primary, env),
-        }
-    }
-
-    fn compile_invoke(
-        &mut self,
-        callee: &Box<Expression>,
-        args: &Vec<Expression>,
-        env: &mut env::Environment<'ctx>,
-    ) -> BasicValueEnum<'ctx> {
-        let Expression::Primary(Primary::Identifier(ref callee)) = **callee else {
-            todo!("Add support for first order functions.")
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
+        let val = match expression {
+            Expression::Binary(left, op, right) => self.compile_binary(left, op, right, env)?,
+            Expression::Unary(..) => todo!(),
+            Expression::Invoke(..) => todo!(),
+            Expression::Primary(primary) => self.compile_primary(primary, env)?,
         };
 
-        let fn_val = self.module.get_function(&callee).unwrap();
-        let mut arg_values = Vec::new();
-
-        for arg in args {
-            arg_values.push(self.compile_expression(arg, env).to_meta_val());
-        }
-
-        self.builder
-            .build_call(fn_val, &arg_values, "calltmp")
-            .unwrap()
-            .try_as_basic_value()
-            .left()
-            .unwrap()
+        Ok(val)
     }
+
+    // fn compile_invoke(
+    //     &mut self,
+    //     callee: &Box<Expression>,
+    //     args: &Vec<Expression>,
+    //     env: &mut env::Environment<'ctx>,
+    // ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
+    //     let Expression::Primary(Primary::Identifier(ref callee)) = **callee else {
+    //         todo!("Add support for first order functions.")
+    //     };
+
+    //     let fn_val = env.module().get_function(&callee).unwrap();
+    //     let mut arg_values = Vec::new();
+
+    //     for arg in args {
+    //         arg_values.push(BasicMetadataValueEnum::StructValue(
+    //             self.compile_expression(arg, env)?,
+    //         ));
+    //     }
+
+    //     Ok(self
+    //         .builder
+    //         .build_call(fn_val, &arg_values, "calltmp")?
+    //         .try_as_basic_value()
+    //         .left()
+    //         .ok_or(GenError::Call)?
+    //         .into_struct_value())
+    // }
 
     fn compile_binary(
         &mut self,
@@ -148,193 +231,73 @@ impl<'ctx> CodeGen<'ctx> {
         op: &BinaryOp,
         right: &Box<Expression>,
         env: &mut env::Environment<'ctx>,
-    ) -> BasicValueEnum<'ctx> {
-        let left = self.compile_expression(left, env);
-        let right = self.compile_expression(right, env);
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
+        let (left_ptr, left_type) = self.compile_expression(left, env)?;
+        let (right_ptr, right_type) = self.compile_expression(right, env)?;
 
-        match op {
-            BinaryOp::And => todo!(),
-            BinaryOp::Or => todo!(),
-            BinaryOp::NotEqual => todo!(),
-            BinaryOp::Equal => todo!(),
-            BinaryOp::Greater => todo!(),
-            BinaryOp::GreaterEqual => todo!(),
-            BinaryOp::Less => todo!(),
-            BinaryOp::LessEqual => todo!(),
-            BinaryOp::Add => self.compile_add(left, right),
-            BinaryOp::Subtract => self.compile_sub(left, right),
-            BinaryOp::Multiply => self.compile_mul(left, right),
-            BinaryOp::Divide => self.compile_div(left, right),
-            BinaryOp::Modulo => self.compile_mod(left, right),
-        }
+        let op_func_name = op.to_op_func();
+        let op_func = env
+            .find_func(op_func_name, Some(left_type), &[left_type, right_type])?
+            .get_from(env);
+
+        let ret_type = env.get_type(op_func.ret_type);
+        let fn_ret =
+            self.builder
+                .build_call(op_func.ink(), &[left_ptr.into(), right_ptr.into()], "tmp")?;
+        let ret_ptr = self.builder.build_alloca(ret_type.ink(), "tmp")?;
+        self.builder.build_store(
+            ret_ptr,
+            fn_ret
+                .try_as_basic_value()
+                .unwrap_left()
+                .into_struct_value(),
+        )?;
+
+        Ok((ret_ptr, op_func.ret_type))
     }
 
     fn compile_primary(
         &mut self,
         primary: &Primary,
         env: &mut Environment<'ctx>,
-    ) -> BasicValueEnum<'ctx> {
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
         match primary {
-            Primary::Identifier(ident) => {
-                let (var_ptr, var_type) = env.get_var(ident).unwrap();
-                self.builder.build_load(var_type, var_ptr, ident).unwrap()
+            Primary::Identifier(ident) => Ok(env.get_var(ident)?),
+            Primary::Integer(val) => {
+                let int_type = env.get_type(INT_ID);
+                let inner_int = self.ctx.i64_type().const_int(*val as u64, true);
+                let ptr = self.build_struct_pointer(int_type, &[inner_int.into()])?;
+                Ok((ptr, INT_ID))
             }
-            Primary::Integer(val) => self
-                .ctx
-                .i64_type()
-                .const_int(*val as u64, true) // TODO: figure out negatives
-                .as_basic_value_enum(),
-            Primary::Float(_) => todo!(),
-            Primary::String(val) => {
-                let str_val = self.ctx.const_string(val.as_bytes(), false);
-                self.builder
-                    .build_global_string_ptr(&val, "temp_str")
-                    .unwrap()
-                    .as_pointer_value()
-                    .as_basic_value_enum()
+            Primary::Float(val) => {
+                let float_type = env.get_type(FLOAT_ID);
+                let inner_float = self.ctx.f64_type().const_float(*val);
+                let ptr = self.build_struct_pointer(float_type, &[inner_float.into()])?;
+                Ok((ptr, FLOAT_ID))
             }
-            Primary::Bool(val) => self
-                .ctx
-                .bool_type()
-                .const_int((*val) as u64, false)
-                .as_basic_value_enum(),
+            Primary::String(..) => todo!(),
+            Primary::Bool(val) => {
+                let bool_type = env.get_type(BOOL_ID);
+                let inner_bool = self.ctx.bool_type().const_int((*val) as u64, false);
+                let ptr = self.build_struct_pointer(bool_type, &[inner_bool.into()])?;
+                Ok((ptr, BOOL_ID))
+            }
             Primary::None => todo!(),
-            Primary::Grouping(expression) => todo!(),
+            Primary::Grouping(..) => todo!(),
         }
     }
 
-    fn ident_to_type(
+    fn build_struct_pointer(
         &mut self,
-        type_ident: &str,
-        env: &mut Environment<'ctx>,
-    ) -> BasicTypeEnum<'ctx> {
-        match type_ident {
-            // TODO: Better type identifier handling
-            "int" => self.ctx.i64_type().as_basic_type_enum(),
-            "float" => self.ctx.f64_type().as_basic_type_enum(),
-            "bool" => self.ctx.bool_type().as_basic_type_enum(),
-            "str" => self
-                .ctx
-                .ptr_type(AddressSpace::default())
-                .as_basic_type_enum(),
-            _ => todo!("Add user defined types"),
-        }
-    }
+        type_def: &TypeDef<'ctx>,
+        values: &[BasicValueEnum<'ctx>],
+    ) -> Result<PointerValue<'ctx>, GenError> {
+        let ink_type: StructType<'ctx> = type_def.ink();
 
-    fn params_to_types(
-        &mut self,
-        params: &Vec<FuncParameter>,
-        env: &mut Environment<'ctx>,
-    ) -> (Vec<BasicMetadataTypeEnum<'ctx>>, bool) {
-        let mut param_types = Vec::new();
-        let mut var_args = false;
+        let val = ink_type.const_named_struct(values);
+        let val_ptr = self.builder.build_alloca(ink_type, "literal")?; // TODO: Memory Mangement ???? MALLOC??? RC???
+        self.builder.build_store(val_ptr, val)?;
 
-        for i in 0..param_types.len() {
-            let param = &params[i];
-
-            if var_args {
-                panic!("Cannot have paramter following a var args parameter.")
-            }
-
-            if param.var_args {
-                var_args = true;
-            } else {
-                param_types.push(
-                    self.ident_to_type(&param.type_identifier, env)
-                        .to_meta_type(),
-                );
-            }
-        }
-
-        (param_types, var_args)
-    }
-
-    fn compile_bool_and(
-        &mut self,
-        left: BasicValueEnum<'ctx>,
-        right: BasicValueEnum<'ctx>,
-    ) -> BasicValueEnum<'ctx> {
-        use BasicValueEnum::*;
-        match (left, right) {
-            (StructValue(test), _) => {
-                // test.
-                todo!()
-            }
-            (IntValue(left), IntValue(right)) => self
-                .builder
-                .build_int_compare(inkwell::IntPredicate::SGE, left, right, "tmp")
-                .unwrap()
-                .as_basic_value_enum(),
-            (l, r) => panic!(
-                "Unsupported {} operation between {} and {}.",
-                stringify!($name),
-                l.get_type(),
-                r.get_type()
-            ),
-        }
+        Ok(val_ptr)
     }
 }
-
-macro_rules! compile_num_op_func {
-    ($fn_name:ident, $name:ident, $int_op:ident, $float_op:ident) => {
-        impl<'ctx> CodeGen<'ctx> {
-            fn $fn_name(
-                &mut self,
-                left: BasicValueEnum<'ctx>,
-                right: BasicValueEnum<'ctx>,
-            ) -> BasicValueEnum<'ctx> {
-                use BasicValueEnum::*;
-
-                match (left, right) {
-                    (IntValue(left), IntValue(right)) => self
-                        .builder
-                        .$int_op(left, right, concat!(stringify!($name), "tmp"))
-                        .unwrap()
-                        .as_basic_value_enum(),
-                    (IntValue(i_val), FloatValue(f_val)) => {
-                        let left = self
-                            .builder
-                            .build_signed_int_to_float(i_val, self.ctx.f64_type(), "casttmp")
-                            .unwrap();
-
-                        self.builder
-                            .$float_op(left, f_val, concat!(stringify!($name), "tmp"))
-                            .unwrap()
-                            .as_basic_value_enum()
-                    }
-                    (FloatValue(left), IntValue(i_val)) => {
-                        let right = self
-                            .builder
-                            .build_signed_int_to_float(i_val, self.ctx.f64_type(), "casttmp")
-                            .unwrap();
-
-                        self.builder
-                            .$float_op(left, right, concat!(stringify!($name), "tmp"))
-                            .unwrap()
-                            .as_basic_value_enum()
-                    }
-                    (FloatValue(left), FloatValue(right)) => self
-                        .builder
-                        .$float_op(left, right, concat!(stringify!($name), "tmp"))
-                        .unwrap()
-                        .as_basic_value_enum(),
-                    (StructValue(_struct_value), _) => {
-                        todo!("User-defined type operation not yet supported")
-                    }
-                    (l, r) => panic!(
-                        "Unsupported {} operation between {} and {}.",
-                        stringify!($name),
-                        l.get_type(),
-                        r.get_type()
-                    ),
-                }
-            }
-        }
-    };
-}
-
-compile_num_op_func!(compile_add, add, build_int_add, build_float_add);
-compile_num_op_func!(compile_sub, subtact, build_int_sub, build_float_sub);
-compile_num_op_func!(compile_mul, multiply, build_int_mul, build_float_mul);
-compile_num_op_func!(compile_div, divide, build_int_signed_div, build_float_div);
-compile_num_op_func!(compile_mod, modulo, build_int_signed_rem, build_float_rem);

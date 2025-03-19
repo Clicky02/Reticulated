@@ -1,4 +1,2 @@
 /target
-*.ll
-*.o
-*.exe
+/out

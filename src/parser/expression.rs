@@ -32,6 +32,26 @@ pub enum BinaryOp {
     Modulo,
 }
 
+impl BinaryOp {
+    pub fn to_op_func(&self) -> &str {
+        match self {
+            BinaryOp::And => todo!(),
+            BinaryOp::Or => todo!(),
+            BinaryOp::NotEqual => todo!(),
+            BinaryOp::Equal => todo!(),
+            BinaryOp::Greater => todo!(),
+            BinaryOp::GreaterEqual => todo!(),
+            BinaryOp::Less => todo!(),
+            BinaryOp::LessEqual => todo!(),
+            BinaryOp::Add => "__add__",
+            BinaryOp::Subtract => todo!(),
+            BinaryOp::Multiply => todo!(),
+            BinaryOp::Divide => todo!(),
+            BinaryOp::Modulo => todo!(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum UnaryOp {
     Not,
