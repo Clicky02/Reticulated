@@ -14,13 +14,10 @@ use inkwell::{
 
 pub mod env;
 pub mod err;
+pub mod primitives;
 pub mod to_meta;
 
 use crate::parser::{BinaryOp, Expression, Primary, Statement};
-
-const INT_NAME: &str = "int";
-const FLOAT_NAME: &str = "float";
-const BOOL_NAME: &str = "bool";
 
 // TODO: Not pub
 pub struct CodeGen<'ctx> {
@@ -34,59 +31,6 @@ impl<'ctx> CodeGen<'ctx> {
             ctx,
             builder: ctx.create_builder(),
         }
-    }
-
-    fn setup_primitive_types(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
-        let int_struct = self.ctx.opaque_struct_type(INT_NAME);
-        int_struct.set_body(&[self.ctx.i64_type().into()], false);
-        env.reserve_type_id(INT_ID, INT_NAME, int_struct)?;
-
-        let int_add_int_fn =
-            env.create_func(Some(INT_ID), "__add__", &[INT_ID, INT_ID], INT_ID, false)?;
-
-        let int_add_int_entry = self.ctx.append_basic_block(int_add_int_fn, "entry");
-        self.builder.position_at_end(int_add_int_entry);
-
-        let left_ptr = int_add_int_fn
-            .get_first_param()
-            .unwrap()
-            .into_pointer_value();
-        let left = self
-            .builder
-            .build_struct_gep(int_struct, left_ptr, 0, "left_ptr")?;
-        let left = self
-            .builder
-            .build_load(int_struct.get_field_type_at_index(0).unwrap(), left, "left")?
-            .into_int_value();
-
-        let right_ptr = int_add_int_fn
-            .get_nth_param(1)
-            .unwrap()
-            .into_pointer_value();
-        let right = self
-            .builder
-            .build_struct_gep(int_struct, right_ptr, 0, "right_ptr")?;
-        let right = self
-            .builder
-            .build_load(
-                int_struct.get_field_type_at_index(0).unwrap(),
-                right,
-                "right",
-            )?
-            .into_int_value();
-
-        let result_val = self.builder.build_int_add(left, right, "result_val")?;
-        self.builder.build_aggregate_return(&[result_val.into()])?;
-
-        let float_struct = self.ctx.opaque_struct_type(FLOAT_NAME);
-        float_struct.set_body(&[self.ctx.f64_type().into()], false);
-        env.reserve_type_id(FLOAT_ID, FLOAT_NAME, float_struct)?;
-
-        let bool_struct = self.ctx.opaque_struct_type(BOOL_NAME);
-        bool_struct.set_body(&[self.ctx.bool_type().into()], false);
-        env.reserve_type_id(BOOL_ID, BOOL_NAME, bool_struct)?;
-
-        Ok(())
     }
 
     pub fn gen_code_for(&mut self, program: Vec<Statement>) -> Module<'ctx> {
