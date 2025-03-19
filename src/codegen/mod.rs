@@ -227,7 +227,7 @@ impl<'ctx> CodeGen<'ctx> {
                 Ok((ptr, BOOL_ID))
             }
             Primary::None => todo!(),
-            Primary::Grouping(..) => todo!(),
+            Primary::Grouping(expr) => self.compile_expression(expr, env),
         }
     }
 
