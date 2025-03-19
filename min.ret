@@ -1,2 +1,5 @@
 age: int = 5 + 3 - 2
 age = age - 1
+
+age_float: float = 5.0 + 1.05
+age_float = age_float + 2.0 

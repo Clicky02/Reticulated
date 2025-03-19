@@ -107,13 +107,29 @@ impl<R: ReadSource> Lexer<R> {
 
     /// Consumes a number (starting with a digit)
     fn consume_number(&mut self) -> TokenKind {
+        let mut is_float = false;
+
         self.consume_while(|ch| ch.is_digit(10));
-        TokenKind::Literal(LiteralKind::Integer(
-            self.source
-                .range(self.token_start..self.source.pos())
-                .parse()
-                .unwrap(),
-        ))
+        if self.consume_expected('.') {
+            is_float = true;
+            self.consume_while(|ch| ch.is_digit(10));
+        }
+
+        if is_float {
+            TokenKind::Literal(LiteralKind::Float(
+                self.source
+                    .range(self.token_start..self.source.pos())
+                    .parse()
+                    .unwrap(),
+            ))
+        } else {
+            TokenKind::Literal(LiteralKind::Integer(
+                self.source
+                    .range(self.token_start..self.source.pos())
+                    .parse()
+                    .unwrap(),
+            ))
+        }
     }
 
     /// Begins a token, should be called before advancing.
