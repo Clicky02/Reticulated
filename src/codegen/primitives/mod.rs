@@ -65,4 +65,24 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.build_aggregate_return(&[result_val])?;
         Ok(())
     }
+
+    fn build_primitive_unary_fn(
+        &mut self,
+        fn_val: FunctionValue<'ctx>,
+        expr_type: StructType<'ctx>,
+        build_op_fn: impl FnOnce(
+            &mut Self,
+            BasicValueEnum<'ctx>,
+        ) -> Result<BasicValueEnum<'ctx>, GenError>,
+    ) -> Result<(), GenError> {
+        let entry = self.ctx.append_basic_block(fn_val, "entry");
+        self.builder.position_at_end(entry);
+
+        let expr = self.get_primitive_from_param(0, fn_val, expr_type)?;
+
+        let result_val = build_op_fn(self, expr)?;
+
+        self.builder.build_aggregate_return(&[result_val])?;
+        Ok(())
+    }
 }

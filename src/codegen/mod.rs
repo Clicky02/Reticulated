@@ -17,7 +17,7 @@ pub mod err;
 pub mod primitives;
 pub mod to_meta;
 
-use crate::parser::{BinaryOp, Expression, Primary, Statement};
+use crate::parser::{BinaryOp, Expression, Primary, Statement, UnaryOp};
 
 // TODO: Not pub
 pub struct CodeGen<'ctx> {
@@ -133,7 +133,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
         let val = match expression {
             Expression::Binary(left, op, right) => self.compile_binary(left, op, right, env)?,
-            Expression::Unary(..) => todo!(),
+            Expression::Unary(op, expr) => self.compile_unary(op, expr, env)?,
             Expression::Invoke(..) => todo!(),
             Expression::Primary(primary) => self.compile_primary(primary, env)?,
         };
@@ -179,7 +179,7 @@ impl<'ctx> CodeGen<'ctx> {
         let (left_ptr, left_type) = self.compile_expression(left, env)?;
         let (right_ptr, right_type) = self.compile_expression(right, env)?;
 
-        let op_func_name = op.to_op_func();
+        let op_func_name = op.fn_name();
         let op_func = env
             .find_func(op_func_name, Some(left_type), &[left_type, right_type])?
             .get_from(env);
@@ -188,6 +188,35 @@ impl<'ctx> CodeGen<'ctx> {
         let fn_ret =
             self.builder
                 .build_call(op_func.ink(), &[left_ptr.into(), right_ptr.into()], "tmp")?;
+        let ret_ptr = self.builder.build_alloca(ret_type.ink(), "tmp")?;
+        self.builder.build_store(
+            ret_ptr,
+            fn_ret
+                .try_as_basic_value()
+                .unwrap_left()
+                .into_struct_value(),
+        )?;
+
+        Ok((ret_ptr, op_func.ret_type))
+    }
+
+    fn compile_unary(
+        &mut self,
+        op: &UnaryOp,
+        expr: &Box<Expression>,
+        env: &mut env::Environment<'ctx>,
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
+        let (expr_ptr, expr_type) = self.compile_expression(expr, env)?;
+
+        let op_fn_name = op.fn_name();
+        let op_func = env
+            .find_func(op_fn_name, Some(expr_type), &[expr_type])?
+            .get_from(env);
+
+        let ret_type = env.get_type(op_func.ret_type);
+        let fn_ret = self
+            .builder
+            .build_call(op_func.ink(), &[expr_ptr.into()], "tmp")?;
         let ret_ptr = self.builder.build_alloca(ret_type.ink(), "tmp")?;
         self.builder.build_store(
             ret_ptr,

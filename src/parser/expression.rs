@@ -33,7 +33,7 @@ pub enum BinaryOp {
 }
 
 impl BinaryOp {
-    pub fn to_op_func(&self) -> &str {
+    pub fn fn_name(&self) -> &str {
         match self {
             BinaryOp::And => todo!(),
             BinaryOp::Or => todo!(),
@@ -56,6 +56,15 @@ impl BinaryOp {
 pub enum UnaryOp {
     Not,
     Negate,
+}
+
+impl UnaryOp {
+    pub fn fn_name(&self) -> &str {
+        match self {
+            UnaryOp::Not => todo!(),
+            UnaryOp::Negate => "__neg__",
+        }
+    }
 }
 
 #[derive(Debug)]
