@@ -53,7 +53,7 @@ impl<'ctx> Environment<'ctx> {
     }
 
     pub fn get_var(&self, ident: &str) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
-        for scope in &self.scopes {
+        for scope in self.scopes.iter().rev() {
             if scope.variables.contains_key(ident) {
                 return Ok(scope.variables.get(ident).cloned().unwrap());
             }

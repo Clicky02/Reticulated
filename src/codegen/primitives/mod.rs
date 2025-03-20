@@ -1,6 +1,6 @@
 use inkwell::{
     types::StructType,
-    values::{BasicValueEnum, FunctionValue},
+    values::{BasicValueEnum, FunctionValue, PointerValue},
 };
 
 use super::{env::Environment, err::GenError, CodeGen};
@@ -21,6 +21,22 @@ impl<'ctx> CodeGen<'ctx> {
         Ok(())
     }
 
+    pub fn extract_primitive(
+        &mut self,
+        struct_ptr: PointerValue<'ctx>,
+        struct_type: StructType<'ctx>,
+    ) -> Result<BasicValueEnum<'ctx>, GenError> {
+        let val_ptr = self
+            .builder
+            .build_struct_gep(struct_type, struct_ptr, 0, "param_ptr")?;
+
+        Ok(self.builder.build_load(
+            struct_type.get_field_type_at_index(0).unwrap(),
+            val_ptr,
+            "primitive",
+        )?)
+    }
+
     fn get_primitive_from_param(
         &mut self,
         param_idx: u32,
@@ -32,15 +48,7 @@ impl<'ctx> CodeGen<'ctx> {
             .unwrap()
             .into_pointer_value();
 
-        let param_val_ptr =
-            self.builder
-                .build_struct_gep(prim_struct, param_ptr, 0, "param_ptr")?;
-
-        Ok(self.builder.build_load(
-            prim_struct.get_field_type_at_index(0).unwrap(),
-            param_val_ptr,
-            "param",
-        )?)
+        self.extract_primitive(param_ptr, prim_struct)
     }
 
     fn build_primitive_binary_fn(

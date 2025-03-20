@@ -98,8 +98,8 @@ impl<R: ReadSource> Lexer<R> {
             "and" => TokenKind::Operator(OperatorKind::And),
             "not" => TokenKind::Operator(OperatorKind::Not),
 
-            "true" => TokenKind::Literal(LiteralKind::Boolean(true)),
-            "false" => TokenKind::Literal(LiteralKind::Boolean(false)),
+            "True" => TokenKind::Literal(LiteralKind::Boolean(true)),
+            "False" => TokenKind::Literal(LiteralKind::Boolean(false)),
 
             _ => TokenKind::Identifier(text),
         }
