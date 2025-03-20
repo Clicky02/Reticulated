@@ -9,3 +9,5 @@ if True {
 } else {
     age = 4
 }
+
+return age

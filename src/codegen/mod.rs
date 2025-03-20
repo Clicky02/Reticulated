@@ -126,7 +126,19 @@ impl<'ctx> CodeGen<'ctx> {
                 else_branch,
                 env,
             )?,
-            Statement::ReturnStatement { expression: _ } => todo!(),
+            Statement::ReturnStatement { expression: expr } => {
+                let (expr_ptr, expr_type_id) = self.compile_expression(expr, env)?;
+                let expr_type = env.get_type(expr_type_id);
+                let expr_val = self.builder.build_load(expr_type.ink(), expr_ptr, "tmp")?;
+
+                // At main function
+                if env.scopes.len() == 1 {
+                    let val = self.extract_primitive(expr_ptr, expr_type.ink())?;
+                    self.builder.build_return(Some(&val))?;
+                } else {
+                    self.builder.build_return(Some(&expr_val))?;
+                }
+            }
         };
 
         Ok(())
