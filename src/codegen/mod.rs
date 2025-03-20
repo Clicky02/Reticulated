@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use env::{
-    id::{TypeId, BOOL_ID, FLOAT_ID, INT_ID},
+    id::{FunctionId, TypeId, BOOL_ID, FLOAT_ID, INT_ID},
     Environment,
 };
 use err::GenError;
@@ -77,8 +77,6 @@ impl<'ctx> CodeGen<'ctx> {
                 assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
 
                 expr_ptr.set_name(identifier);
-
-                let expr_ptr = self.copy_pointer(expr_ptr, expr_type_id, env)?;
                 env.insert_var(identifier.clone(), expr_ptr, expr_type_id);
             }
             Statement::Assignment {
@@ -88,9 +86,10 @@ impl<'ctx> CodeGen<'ctx> {
                 let (_var_ptr, var_type_id) = env.get_var(identifier)?;
                 let (expr_ptr, expr_type_id) = self.compile_expression(expression, env)?;
 
+                // TODO: Decrement old ref count
+
                 assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
 
-                let expr_ptr = self.copy_pointer(expr_ptr, expr_type_id, env)?;
                 env.update_var(identifier, expr_ptr)?;
             }
             Statement::FunctionDeclaration {
@@ -106,7 +105,7 @@ impl<'ctx> CodeGen<'ctx> {
             } => todo!(),
             Statement::Expression(expression) => {
                 self.compile_expression(expression, env)?;
-                // free here
+                // TODO: Decrement ref count
             }
             Statement::IfStatement {
                 condition,
@@ -145,6 +144,8 @@ impl<'ctx> CodeGen<'ctx> {
         else_branch: &Option<Vec<Statement>>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
+        // TODO: Decrement Condition Expressions
+
         let (cond_ptr, cond_type_id) = self.compile_expression(condition, env)?;
         let cond_type = env.get_type(cond_type_id);
         // TODO: Check boolean?
@@ -267,22 +268,11 @@ impl<'ctx> CodeGen<'ctx> {
             .into_iter()
             .map(|val| self.compile_expression(val, env))
             .collect::<Result<Vec<_>, GenError>>()?;
-        let (param_vals, param_types): (Vec<_>, Vec<_>) = params
-            .into_iter()
-            .map(|(val, typ)| (BasicMetadataValueEnum::from(val), typ))
-            .unzip();
+        let (param_vals, param_types): (Vec<_>, Vec<_>) = params.into_iter().unzip();
 
-        let fn_val = env.find_func(ident, None, &param_types)?.get_from(env);
-        let ret_val = self.builder.build_call(fn_val.ink(), &param_vals, "tmp")?;
-        let ret_ptr = ret_val
-            .try_as_basic_value()
-            .unwrap_left()
-            .into_pointer_value();
+        let fn_id = env.find_func(ident, None, &param_types)?;
 
-        let ret_type_id = fn_val.ret_type;
-        let ret_ptr = self.copy_pointer(ret_ptr, ret_type_id, env)?;
-
-        Ok((ret_ptr, ret_type_id))
+        self.call_func(fn_id, &param_vals, env)
     }
 
     fn compile_binary(
@@ -296,24 +286,9 @@ impl<'ctx> CodeGen<'ctx> {
         let (right_ptr, right_type) = self.compile_expression(right, env)?;
 
         let op_func_name = op.fn_name();
-        let op_func = env
-            .find_func(op_func_name, Some(left_type), &[left_type, right_type])?
-            .get_from(env);
+        let op_func_id = env.find_func(op_func_name, Some(left_type), &[left_type, right_type])?;
 
-        let ret_type = env.get_type(op_func.ret_type);
-        let fn_ret =
-            self.builder
-                .build_call(op_func.ink(), &[left_ptr.into(), right_ptr.into()], "tmp")?;
-        let ret_ptr = self.builder.build_alloca(ret_type.ink(), "tmp")?;
-        self.builder.build_store(
-            ret_ptr,
-            fn_ret
-                .try_as_basic_value()
-                .unwrap_left()
-                .into_struct_value(),
-        )?;
-
-        Ok((ret_ptr, op_func.ret_type))
+        self.call_func(op_func_id, &[left_ptr, right_ptr], env)
     }
 
     fn compile_unary(
@@ -324,25 +299,9 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
         let (expr_ptr, expr_type) = self.compile_expression(expr, env)?;
 
-        let op_fn_name = op.fn_name();
-        let op_func = env
-            .find_func(op_fn_name, Some(expr_type), &[expr_type])?
-            .get_from(env);
+        let op_func_id = env.find_func(op.fn_name(), Some(expr_type), &[expr_type])?;
 
-        let ret_type = env.get_type(op_func.ret_type);
-        let fn_ret = self
-            .builder
-            .build_call(op_func.ink(), &[expr_ptr.into()], "tmp")?;
-        let ret_ptr = self.builder.build_alloca(ret_type.ink(), "tmp")?;
-        self.builder.build_store(
-            ret_ptr,
-            fn_ret
-                .try_as_basic_value()
-                .unwrap_left()
-                .into_struct_value(),
-        )?;
-
-        Ok((ret_ptr, op_func.ret_type))
+        self.call_func(op_func_id, &[expr_ptr], env)
     }
 
     fn compile_primary(
@@ -351,7 +310,11 @@ impl<'ctx> CodeGen<'ctx> {
         env: &mut Environment<'ctx>,
     ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
         match primary {
-            Primary::Identifier(ident) => Ok(env.get_var(ident)?),
+            Primary::Identifier(ident) => {
+                let (ptr, type_id) = env.get_var(ident)?;
+                let ptr = self.copy_pointer(ptr, type_id, env)?;
+                Ok((ptr, type_id))
+            }
             Primary::Integer(val) => {
                 let int_type = env.get_type(INT_ID);
                 let inner_int = self.ctx.i64_type().const_int(*val as u64, true);
@@ -376,17 +339,24 @@ impl<'ctx> CodeGen<'ctx> {
         }
     }
 
+    // TODO: Could make a more optimized version of this for constants that uses const_named_struct
     fn build_struct(
         &mut self,
         struct_type: StructType<'ctx>,
         mut values: Vec<BasicValueEnum<'ctx>>,
     ) -> Result<PointerValue<'ctx>, GenError> {
-        values.push(self.ctx.i64_type().const_int(0, false).into());
+        values.push(self.ctx.i64_type().const_int(1, false).into());
+        assert_eq!(struct_type.count_fields() as usize, values.len());
 
-        let val = struct_type.const_named_struct(&values);
         let val_ptr = self.builder.build_malloc(struct_type, "literal")?; // TODO: Memory Mangement ???? MALLOC??? RC???
-        self.builder.build_store(val_ptr, val)?;
 
+        for i in 0..struct_type.count_fields() {
+            let struct_val_ptr =
+                self.builder
+                    .build_struct_gep(struct_type, val_ptr, i, "struct_val_ptr")?;
+            self.builder
+                .build_store(struct_val_ptr, values[i as usize])?;
+        }
         Ok(val_ptr)
     }
 
@@ -415,6 +385,31 @@ impl<'ctx> CodeGen<'ctx> {
         let struct_type = self.ctx.opaque_struct_type(ident);
         struct_type.set_body(&fields, false);
         struct_type
+    }
+
+    fn call_func(
+        &mut self,
+        fn_id: FunctionId,
+        args: &[PointerValue<'ctx>],
+        env: &mut env::Environment<'ctx>,
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
+        let param_vals: Vec<_> = args
+            .into_iter()
+            .map(|val| BasicMetadataValueEnum::from(*val))
+            .collect();
+
+        let fn_val = fn_id.get_from(env);
+        let ret_val = self.builder.build_call(fn_val.ink(), &param_vals, "tmp")?;
+        let ret_ptr = ret_val
+            .try_as_basic_value()
+            .unwrap_left()
+            .into_pointer_value();
+
+        let ret_type_id = fn_val.ret_type;
+
+        // TODO: Decrement param pointers
+
+        Ok((ret_ptr, ret_type_id))
     }
 
     fn copy_pointer(
