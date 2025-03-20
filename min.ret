@@ -1,13 +1,5 @@
-age: int = 0
-
-if True {
-    age = 1
-} else if True {
-    age = 2
-} else if True {
-    age = 3
-} else {
-    age = 4
-}
+age: int = 1 + 1
+age2: int = 5
+age = age2
 
 return age

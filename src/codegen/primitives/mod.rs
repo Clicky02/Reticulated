@@ -56,6 +56,7 @@ impl<'ctx> CodeGen<'ctx> {
         fn_val: FunctionValue<'ctx>,
         left_type: StructType<'ctx>,
         right_type: StructType<'ctx>,
+        ret_type: StructType<'ctx>,
         build_op_fn: impl FnOnce(
             &mut Self,
             BasicValueEnum<'ctx>,
@@ -70,7 +71,8 @@ impl<'ctx> CodeGen<'ctx> {
 
         let result_val = build_op_fn(self, left, right)?;
 
-        self.builder.build_aggregate_return(&[result_val])?;
+        let ptr = self.build_struct(ret_type, vec![result_val])?;
+        self.builder.build_return(Some(&ptr))?;
         Ok(())
     }
 
@@ -78,6 +80,7 @@ impl<'ctx> CodeGen<'ctx> {
         &mut self,
         fn_val: FunctionValue<'ctx>,
         expr_type: StructType<'ctx>,
+        ret_type: StructType<'ctx>,
         build_op_fn: impl FnOnce(
             &mut Self,
             BasicValueEnum<'ctx>,
@@ -90,7 +93,8 @@ impl<'ctx> CodeGen<'ctx> {
 
         let result_val = build_op_fn(self, expr)?;
 
-        self.builder.build_aggregate_return(&[result_val])?;
+        let ptr = self.build_struct(ret_type, vec![result_val])?;
+        self.builder.build_return(Some(&ptr))?;
         Ok(())
     }
 }

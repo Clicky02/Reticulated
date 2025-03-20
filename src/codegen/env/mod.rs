@@ -70,6 +70,19 @@ impl<'ctx> Environment<'ctx> {
             .insert(ident, (var_ptr, ptr_type));
     }
 
+    pub fn update_var(&mut self, ident: &str, var_ptr: PointerValue<'ctx>) -> Result<(), GenError> {
+        for scope in self.scopes.iter_mut().rev() {
+            if let Some((.., type_id)) = scope.variables.get(ident) {
+                scope
+                    .variables
+                    .insert(ident.to_string(), (var_ptr, *type_id));
+                return Ok(());
+            }
+        }
+
+        Err(GenError::VariableNotFound)
+    }
+
     pub fn push_scope(&mut self) {
         self.scopes.push(Scope::default());
     }
@@ -155,7 +168,11 @@ impl<'ctx> Environment<'ctx> {
             })
             .collect::<Vec<_>>();
 
-        let fn_type = ink_ret_type.ink().fn_type(&ink_param_types, is_var_args);
+        let fn_type = ink_ret_type
+            .ink()
+            .get_context()
+            .ptr_type(AddressSpace::default())
+            .fn_type(&ink_param_types, is_var_args);
         let fn_value = self.module.add_function(&fn_name, fn_type, None);
 
         self.register_fn(

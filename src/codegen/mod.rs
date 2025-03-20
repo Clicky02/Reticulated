@@ -1,6 +1,7 @@
+use std::ops::Deref;
+
 use env::{
     id::{TypeId, BOOL_ID, FLOAT_ID, INT_ID},
-    type_def::TypeDef,
     Environment,
 };
 use err::GenError;
@@ -8,8 +9,8 @@ use inkwell::{
     builder::Builder,
     context::Context,
     module::Module,
-    types::StructType,
-    values::{BasicValueEnum, PointerValue},
+    types::{BasicType, BasicTypeEnum, StructType},
+    values::{BasicMetadataValueEnum, BasicValueEnum, PointerValue},
 };
 
 pub mod env;
@@ -76,43 +77,36 @@ impl<'ctx> CodeGen<'ctx> {
                 assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
 
                 expr_ptr.set_name(identifier);
+
+                let expr_ptr = self.copy_pointer(expr_ptr, expr_type_id, env)?;
                 env.insert_var(identifier.clone(), expr_ptr, expr_type_id);
             }
             Statement::Assignment {
                 identifier,
                 expression,
             } => {
-                let (var_ptr, var_type_id) = env.get_var(identifier)?;
+                let (_var_ptr, var_type_id) = env.get_var(identifier)?;
                 let (expr_ptr, expr_type_id) = self.compile_expression(expression, env)?;
 
                 assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
 
-                let expr_type = env.get_type(expr_type_id);
-                let expr_val = self.builder.build_load(expr_type.ink(), expr_ptr, "tmp")?;
-
-                self.builder.build_store(var_ptr, expr_val)?;
+                let expr_ptr = self.copy_pointer(expr_ptr, expr_type_id, env)?;
+                env.update_var(identifier, expr_ptr)?;
             }
             Statement::FunctionDeclaration {
-                identifier: _,
-                parameters: _,
-                return_identifier: _,
-                body: _,
+                identifier,
+                parameters,
+                return_identifier,
+                body,
             } => todo!(),
             Statement::ExternFunctionDeclaration {
                 identifier: _,
                 parameters: _,
                 return_identifier: _,
-            } => {
-                // let (param_types, is_var_args) = self.params_to_types(parameters, env);
-                // let fn_type = self
-                //     .ident_to_type(&return_identifier, env)
-                //     .fn_type(&param_types, is_var_args);
-                // self.module
-                //     .add_function(&identifier, fn_type, Some(Linkage::External));
-                todo!()
-            }
+            } => todo!(),
             Statement::Expression(expression) => {
                 self.compile_expression(expression, env)?;
+                // free here
             }
             Statement::IfStatement {
                 condition,
@@ -252,40 +246,44 @@ impl<'ctx> CodeGen<'ctx> {
         let val = match expression {
             Expression::Binary(left, op, right) => self.compile_binary(left, op, right, env)?,
             Expression::Unary(op, expr) => self.compile_unary(op, expr, env)?,
-            Expression::Invoke(..) => todo!(),
+            Expression::Invoke(expr, params) => self.compile_invoke(expr, params, env)?,
             Expression::Primary(primary) => self.compile_primary(primary, env)?,
         };
 
         Ok(val)
     }
 
-    // fn compile_invoke(
-    //     &mut self,
-    //     callee: &Box<Expression>,
-    //     args: &Vec<Expression>,
-    //     env: &mut env::Environment<'ctx>,
-    // ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
-    //     let Expression::Primary(Primary::Identifier(ref callee)) = **callee else {
-    //         todo!("Add support for first order functions.")
-    //     };
+    fn compile_invoke(
+        &mut self,
+        callee: &Box<Expression>,
+        args: &Vec<Expression>,
+        env: &mut env::Environment<'ctx>,
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
+        let Expression::Primary(Primary::Identifier(ident)) = callee.deref() else {
+            todo!("Add first-class function support")
+        };
 
-    //     let fn_val = env.module().get_function(&callee).unwrap();
-    //     let mut arg_values = Vec::new();
+        let params = args
+            .into_iter()
+            .map(|val| self.compile_expression(val, env))
+            .collect::<Result<Vec<_>, GenError>>()?;
+        let (param_vals, param_types): (Vec<_>, Vec<_>) = params
+            .into_iter()
+            .map(|(val, typ)| (BasicMetadataValueEnum::from(val), typ))
+            .unzip();
 
-    //     for arg in args {
-    //         arg_values.push(BasicMetadataValueEnum::StructValue(
-    //             self.compile_expression(arg, env)?,
-    //         ));
-    //     }
+        let fn_val = env.find_func(ident, None, &param_types)?.get_from(env);
+        let ret_val = self.builder.build_call(fn_val.ink(), &param_vals, "tmp")?;
+        let ret_ptr = ret_val
+            .try_as_basic_value()
+            .unwrap_left()
+            .into_pointer_value();
 
-    //     Ok(self
-    //         .builder
-    //         .build_call(fn_val, &arg_values, "calltmp")?
-    //         .try_as_basic_value()
-    //         .left()
-    //         .ok_or(GenError::Call)?
-    //         .into_struct_value())
-    // }
+        let ret_type_id = fn_val.ret_type;
+        let ret_ptr = self.copy_pointer(ret_ptr, ret_type_id, env)?;
+
+        Ok((ret_ptr, ret_type_id))
+    }
 
     fn compile_binary(
         &mut self,
@@ -357,20 +355,20 @@ impl<'ctx> CodeGen<'ctx> {
             Primary::Integer(val) => {
                 let int_type = env.get_type(INT_ID);
                 let inner_int = self.ctx.i64_type().const_int(*val as u64, true);
-                let ptr = self.build_struct_pointer(int_type, &[inner_int.into()])?;
+                let ptr = self.build_struct(int_type.ink(), vec![inner_int.into()])?;
                 Ok((ptr, INT_ID))
             }
             Primary::Float(val) => {
                 let float_type = env.get_type(FLOAT_ID);
                 let inner_float = self.ctx.f64_type().const_float(*val);
-                let ptr = self.build_struct_pointer(float_type, &[inner_float.into()])?;
+                let ptr = self.build_struct(float_type.ink(), vec![inner_float.into()])?;
                 Ok((ptr, FLOAT_ID))
             }
             Primary::String(..) => todo!(),
             Primary::Bool(val) => {
                 let bool_type = env.get_type(BOOL_ID);
                 let inner_bool = self.ctx.bool_type().const_int((*val) as u64, false);
-                let ptr = self.build_struct_pointer(bool_type, &[inner_bool.into()])?;
+                let ptr = self.build_struct(bool_type.ink(), vec![inner_bool.into()])?;
                 Ok((ptr, BOOL_ID))
             }
             Primary::None => todo!(),
@@ -378,17 +376,72 @@ impl<'ctx> CodeGen<'ctx> {
         }
     }
 
-    fn build_struct_pointer(
+    fn build_struct(
         &mut self,
-        type_def: &TypeDef<'ctx>,
-        values: &[BasicValueEnum<'ctx>],
+        struct_type: StructType<'ctx>,
+        mut values: Vec<BasicValueEnum<'ctx>>,
     ) -> Result<PointerValue<'ctx>, GenError> {
-        let ink_type: StructType<'ctx> = type_def.ink();
+        values.push(self.ctx.i64_type().const_int(0, false).into());
 
-        let val = ink_type.const_named_struct(values);
-        let val_ptr = self.builder.build_alloca(ink_type, "literal")?; // TODO: Memory Mangement ???? MALLOC??? RC???
+        let val = struct_type.const_named_struct(&values);
+        let val_ptr = self.builder.build_malloc(struct_type, "literal")?; // TODO: Memory Mangement ???? MALLOC??? RC???
         self.builder.build_store(val_ptr, val)?;
 
         Ok(val_ptr)
+    }
+
+    fn create_type(
+        &mut self,
+        ident: &str,
+        fields: &[TypeId],
+        env: &mut Environment<'ctx>,
+    ) -> Result<TypeId, GenError> {
+        let field_types = fields
+            .iter()
+            .map(|id| env.get_type(*id).ink().as_basic_type_enum())
+            .collect();
+
+        let struct_type = self.create_struct_type(ident, field_types);
+        env.create_type(ident, struct_type)
+    }
+
+    fn create_struct_type(
+        &self,
+        ident: &str,
+        mut fields: Vec<BasicTypeEnum<'ctx>>,
+    ) -> StructType<'ctx> {
+        fields.push(self.ctx.i64_type().into());
+
+        let struct_type = self.ctx.opaque_struct_type(ident);
+        struct_type.set_body(&fields, false);
+        struct_type
+    }
+
+    fn copy_pointer(
+        &self,
+        ptr: PointerValue<'ctx>,
+        ptr_type_id: TypeId,
+        env: &Environment<'ctx>,
+    ) -> Result<PointerValue<'ctx>, GenError> {
+        let ptr_type = env.get_type(ptr_type_id);
+        let idx = ptr_type.ink().count_fields() - 1;
+
+        let ref_count_ptr =
+            self.builder
+                .build_struct_gep(ptr_type.ink(), ptr, idx, "refcountptr")?;
+
+        let ref_count = self
+            .builder
+            .build_load(self.ctx.i64_type(), ref_count_ptr, "refcount")?
+            .into_int_value();
+        let ref_count = self.builder.build_int_add(
+            ref_count,
+            self.ctx.i64_type().const_int(1, false),
+            "refcount",
+        )?;
+
+        self.builder.build_store(ref_count_ptr, ref_count)?;
+
+        Ok(ptr)
     }
 }
