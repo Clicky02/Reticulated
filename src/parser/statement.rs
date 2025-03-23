@@ -32,6 +32,10 @@ pub enum Statement {
     ReturnStatement {
         expression: Expression,
     },
+    StructDefinition {
+        identifier: String,
+        fields: Vec<(String, String)>,
+    },
 }
 
 #[derive(Debug)]

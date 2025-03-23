@@ -10,7 +10,7 @@ use inkwell::{
     context::Context,
     module::Module,
     types::{BasicType, BasicTypeEnum, StructType},
-    values::{BasicMetadataValueEnum, BasicValueEnum, PointerValue},
+    values::{BasicMetadataValueEnum, BasicValueEnum, InstructionValue, PointerValue},
 };
 
 pub mod env;
@@ -83,10 +83,10 @@ impl<'ctx> CodeGen<'ctx> {
                 identifier,
                 expression,
             } => {
-                let (_var_ptr, var_type_id) = env.get_var(identifier)?;
+                let (var_ptr, var_type_id) = env.get_var(identifier)?;
                 let (expr_ptr, expr_type_id) = self.compile_expression(expression, env)?;
 
-                // TODO: Decrement old ref count
+                self.destroy_pointer(var_ptr, var_type_id, env)?;
 
                 assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
 
@@ -104,8 +104,8 @@ impl<'ctx> CodeGen<'ctx> {
                 return_identifier: _,
             } => todo!(),
             Statement::Expression(expression) => {
-                self.compile_expression(expression, env)?;
-                // TODO: Decrement ref count
+                let (ptr, ptr_type_id) = self.compile_expression(expression, env)?;
+                self.destroy_pointer(ptr, ptr_type_id, env)?;
             }
             Statement::IfStatement {
                 condition,
@@ -131,6 +131,7 @@ impl<'ctx> CodeGen<'ctx> {
 
                 self.builder.build_return(Some(&expr_val))?;
             }
+            Statement::StructDefinition { identifier, fields } => todo!(),
         };
 
         Ok(())
@@ -148,8 +149,11 @@ impl<'ctx> CodeGen<'ctx> {
 
         let (cond_ptr, cond_type_id) = self.compile_expression(condition, env)?;
         let cond_type = env.get_type(cond_type_id);
-        // TODO: Check boolean?
+
+        assert_eq!(cond_type_id, BOOL_ID); // TODO: GenError
+
         let mut cond_val = self.extract_primitive(cond_ptr, cond_type.ink())?;
+        self.destroy_pointer(cond_ptr, cond_type_id, env)?;
 
         let mut source_block = self.builder.get_insert_block().unwrap();
         let func = source_block.get_parent().unwrap();
@@ -191,6 +195,8 @@ impl<'ctx> CodeGen<'ctx> {
             // TODO: Check boolean?
 
             cond_val = self.extract_primitive(cond_ptr, cond_type.ink())?;
+            self.destroy_pointer(cond_ptr, cond_type_id, env)?;
+
             source_block = next_source_block;
             then_block = next_then_block;
 
@@ -288,7 +294,12 @@ impl<'ctx> CodeGen<'ctx> {
         let op_func_name = op.fn_name();
         let op_func_id = env.find_func(op_func_name, Some(left_type), &[left_type, right_type])?;
 
-        self.call_func(op_func_id, &[left_ptr, right_ptr], env)
+        let ret = self.call_func(op_func_id, &[left_ptr, right_ptr], env)?;
+
+        self.destroy_pointer(left_ptr, left_type, env)?;
+        self.destroy_pointer(right_ptr, right_type, env)?;
+
+        Ok(ret)
     }
 
     fn compile_unary(
@@ -301,7 +312,11 @@ impl<'ctx> CodeGen<'ctx> {
 
         let op_func_id = env.find_func(op.fn_name(), Some(expr_type), &[expr_type])?;
 
-        self.call_func(op_func_id, &[expr_ptr], env)
+        let ret = self.call_func(op_func_id, &[expr_ptr], env)?;
+
+        self.destroy_pointer(expr_ptr, expr_type, env)?;
+
+        Ok(ret)
     }
 
     fn compile_primary(
@@ -407,8 +422,6 @@ impl<'ctx> CodeGen<'ctx> {
 
         let ret_type_id = fn_val.ret_type;
 
-        // TODO: Decrement param pointers
-
         Ok((ret_ptr, ret_type_id))
     }
 
@@ -438,5 +451,57 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.build_store(ref_count_ptr, ref_count)?;
 
         Ok(ptr)
+    }
+
+    fn destroy_pointer(
+        &self,
+        ptr: PointerValue<'ctx>,
+        ptr_type_id: TypeId,
+        env: &Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let ptr_type = env.get_type(ptr_type_id);
+        let idx = ptr_type.ink().count_fields() - 1;
+
+        let ref_count_ptr =
+            self.builder
+                .build_struct_gep(ptr_type.ink(), ptr, idx, "refcountptr")?;
+
+        let ref_count = self
+            .builder
+            .build_load(self.ctx.i64_type(), ref_count_ptr, "refcount")?
+            .into_int_value();
+
+        let new_ref_count = self.builder.build_int_sub(
+            ref_count,
+            self.ctx.i64_type().const_int(1, false),
+            "new_refcount",
+        )?;
+
+        self.builder.build_store(ref_count_ptr, new_ref_count)?;
+
+        let ref_count_zero = self.builder.build_int_compare(
+            inkwell::IntPredicate::EQ,
+            new_ref_count,
+            self.ctx.i64_type().const_int(0, false),
+            "is_zero",
+        )?;
+
+        let unalloc_block = self
+            .ctx
+            .insert_basic_block_after(self.builder.get_insert_block().unwrap(), "unalloc");
+        let merge_block = self
+            .ctx
+            .insert_basic_block_after(self.builder.get_insert_block().unwrap(), "continue");
+
+        self.builder
+            .build_conditional_branch(ref_count_zero, unalloc_block, merge_block)?;
+
+        self.builder.position_at_end(unalloc_block);
+        self.builder.build_free(ptr)?;
+        self.builder.build_unconditional_branch(merge_block)?;
+
+        self.builder.position_at_end(merge_block);
+
+        Ok(())
     }
 }

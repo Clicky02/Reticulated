@@ -31,7 +31,7 @@ fn hello(name: string) -> string {
 
 ```plaintext
 program -> statement*
-statement -> (declaration | assignment | function_declaration | extern_function | if_statement | return_statement | expression) "\n"
+statement -> (declaration | assignment | function_declaration | extern_function | if_statement | return_statement | expression | struct_declaration) "\n"
 declaration -> IDENTIFIER ":" IDENTIFIER "=" expression
 assignment -> IDENTIFIER "=" expression
 function_declaration -> "def" IDENTIFIER "(" parameters ")" "->" IDENTIFIER block
@@ -40,6 +40,8 @@ if_statement -> "if" expression block ("else" "if" expression block)* ("else" bl
 return_statement -> "return" expression
 block -> "{" statement* "}"
 parameters -> (IDENTIFIER ":" IDENTIFIER ("," "*"? IDENTIFIER ":" IDENTIFIER)*)?
+struct_declaration -> "struct" IDENTIFIER "{" (struct_field",")* "}"
+struct_field -> IDENTIFIER: IDENTIFIER
 
 expression -> equality
 logical -> equality ( ("or" | "and") equality )*

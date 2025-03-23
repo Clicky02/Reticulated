@@ -58,6 +58,7 @@ impl<R: ReadTokens> Parser<R> {
             TokenKind::Keyword(KeywordKind::Extern) => self.extern_fn_declaration()?,
             TokenKind::Keyword(KeywordKind::If) => self.if_statement()?,
             TokenKind::Keyword(KeywordKind::Return) => self.return_statement()?,
+            TokenKind::Keyword(KeywordKind::Struct) => self.struct_definition()?,
             _ => Statement::Expression(self.expression()?),
         };
 
@@ -226,6 +227,29 @@ impl<R: ReadTokens> Parser<R> {
         Ok(Statement::ReturnStatement { expression })
     }
 
+    fn struct_definition(&mut self) -> Result<Statement, String> {
+        // struct_declaration -> "struct" IDENTIFIER "{" (struct_field",")* "}"
+        // struct_field -> IDENTIFIER: IDENTIFIER
+
+        self.tokens.expect_keyword(KeywordKind::Struct)?;
+
+        let identifier = self.tokens.expect_identifier()?;
+
+        self.tokens.expect(TokenKind::OpenBrace)?;
+
+        let mut fields = Vec::new();
+        while !self.tokens.check(TokenKind::CloseBrace) {
+            let field_name = self.tokens.expect_identifier()?;
+            self.tokens.expect(TokenKind::Colon)?; // Skip the colon
+            let field_type = self.tokens.expect_identifier()?;
+            fields.push((field_name, field_type));
+
+            self.tokens.expect(TokenKind::Comma)?;
+        }
+
+        Ok(Statement::StructDefinition { identifier, fields })
+    }
+
     fn block(&mut self) -> Result<Vec<Statement>, String> {
         let mut statements = Vec::new();
 
@@ -317,7 +341,8 @@ impl<R: ReadTokens> Parser<R> {
 
         let mut expr = self.primary()?;
 
-        while self.tokens.check(TokenKind::OpenParenthesis) { // allow multiple invokations in a row
+        while self.tokens.check(TokenKind::OpenParenthesis) {
+            // allow multiple invokations in a row
             self.tokens.advance(); // Eat open paranthesis
 
             let mut args = Vec::new();

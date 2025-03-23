@@ -89,6 +89,7 @@ impl<R: ReadSource> Lexer<R> {
             "else" => TokenKind::Keyword(KeywordKind::Else),
             "def" => TokenKind::Keyword(KeywordKind::Def),
             "extern" => TokenKind::Keyword(KeywordKind::Extern),
+            "struct" => TokenKind::Keyword(KeywordKind::Struct),
             "for" => TokenKind::Keyword(KeywordKind::For),
             "while" => TokenKind::Keyword(KeywordKind::While),
             "return" => TokenKind::Keyword(KeywordKind::Return),

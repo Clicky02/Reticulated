@@ -150,4 +150,5 @@ pub enum KeywordKind {
     Def,
     Return,
     Extern,
+    Struct,
 }
