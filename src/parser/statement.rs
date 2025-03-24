@@ -36,6 +36,11 @@ pub enum Statement {
         identifier: String,
         fields: Vec<(String, String)>,
     },
+
+    WhileLoop {
+        condition: Expression,
+        block: Vec<Statement>,
+    },
 }
 
 #[derive(Debug)]

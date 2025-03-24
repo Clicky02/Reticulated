@@ -59,6 +59,7 @@ impl<R: ReadTokens> Parser<R> {
             TokenKind::Keyword(KeywordKind::If) => self.if_statement()?,
             TokenKind::Keyword(KeywordKind::Return) => self.return_statement()?,
             TokenKind::Keyword(KeywordKind::Struct) => self.struct_definition()?,
+            TokenKind::Keyword(KeywordKind::While) => self.while_loop()?,
             _ => Statement::Expression(self.expression()?),
         };
 
@@ -248,6 +249,21 @@ impl<R: ReadTokens> Parser<R> {
         }
 
         Ok(Statement::StructDefinition { identifier, fields })
+    }
+
+    fn while_loop(&mut self) -> Result<Statement, String> {
+        // while_loop -> "while" expression block
+
+        self.tokens.expect_keyword(KeywordKind::While)?;
+
+        let condition = self.expression()?;
+
+        let body = self.block()?;
+
+        Ok(Statement::WhileLoop {
+            condition,
+            block: body,
+        })
     }
 
     fn block(&mut self) -> Result<Vec<Statement>, String> {

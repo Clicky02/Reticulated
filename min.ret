@@ -1,5 +1,5 @@
-age: int = 1 + 1
-age2: int = 5
-age = age2
+age: int = 1
 
-return age
+while True {
+    age = age + 1
+}

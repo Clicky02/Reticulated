@@ -132,6 +132,39 @@ impl<'ctx> CodeGen<'ctx> {
                 self.builder.build_return(Some(&expr_val))?;
             }
             Statement::StructDefinition { identifier, fields } => todo!(),
+            Statement::WhileLoop { condition, block } => {
+                let condition_block = self.ctx.insert_basic_block_after(
+                    self.builder.get_insert_block().unwrap(),
+                    "condition",
+                );
+                let body_block = self.ctx.insert_basic_block_after(condition_block, "body");
+                let merge_block = self.ctx.insert_basic_block_after(body_block, "continue");
+
+                self.builder.build_unconditional_branch(condition_block)?;
+                self.builder.position_at_end(condition_block);
+
+                let (expr_ptr, type_id) = self.compile_expression(condition, env)?;
+                assert_eq!(type_id, BOOL_ID); // TODO Error
+
+                let expr_type = env.get_type(type_id);
+                let bool_val = self
+                    .extract_primitive(expr_ptr, expr_type.ink())?
+                    .into_int_value();
+                self.destroy_pointer(expr_ptr, type_id, env)?;
+
+                self.builder
+                    .build_conditional_branch(bool_val, body_block, merge_block)?;
+
+                self.builder.position_at_end(body_block);
+                env.push_scope();
+                for statement in block {
+                    self.compile_statement(statement, env)?;
+                }
+                env.pop_scope();
+                self.builder.build_unconditional_branch(condition_block)?;
+
+                self.builder.position_at_end(merge_block);
+            }
         };
 
         Ok(())
