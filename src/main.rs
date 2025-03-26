@@ -61,6 +61,40 @@ fn main() {
 }
 
 fn compile_to_executable() {
+    // Compile optimized LLVM IR to an object file
+    let llc_output = Command::new("llc")
+        .arg("./out/output.ll")
+        .arg("-filetype=obj")
+        .arg("-o")
+        .arg("./out/output.o")
+        .output()
+        .expect("Failed to execute llc");
+
+    if !llc_output.status.success() {
+        eprintln!(
+            "Error in llc: {}",
+            String::from_utf8_lossy(&llc_output.stderr)
+        );
+        return;
+    }
+
+    // Link the object file to create an optimized executable
+    let clang_output = Command::new("clang")
+        .arg("./out/output.o")
+        .arg("-O3") // Optimization level 3
+        .arg("-o")
+        .arg("./out/output")
+        .output()
+        .expect("Failed to execute clang");
+
+    if !clang_output.status.success() {
+        eprintln!(
+            "Error in clang: {}",
+            String::from_utf8_lossy(&clang_output.stderr)
+        );
+        return;
+    }
+
     // Compile LLVM IR to an optimized LLVM IR file
     let opt_output = Command::new("opt")
         .arg("-O3") // Optimization level 3
@@ -99,7 +133,7 @@ fn compile_to_executable() {
         .arg("./out/output_opt.ll")
         .arg("-filetype=obj")
         .arg("-o")
-        .arg("./out/output.o")
+        .arg("./out/output_opt.o")
         .output()
         .expect("Failed to execute llc");
 
@@ -113,10 +147,10 @@ fn compile_to_executable() {
 
     // Link the object file to create an optimized executable
     let clang_output = Command::new("clang")
-        .arg("./out/output.o")
+        .arg("./out/output_opt.o")
         .arg("-O3") // Optimization level 3
         .arg("-o")
-        .arg("./out/output")
+        .arg("./out/output_opt")
         .output()
         .expect("Failed to execute clang");
 

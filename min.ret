@@ -3,3 +3,5 @@ age: int = 1
 while True {
     age = age + 1
 }
+
+return age

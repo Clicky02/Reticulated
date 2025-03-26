@@ -1,24 +1,29 @@
 use std::ops::Deref;
 
 use env::{
-    id::{FunctionId, TypeId, BOOL_ID, FLOAT_ID, INT_ID},
+    id::{FunctionId, TypeId, BOOL_ID, FLOAT_ID, INT_ID, NONE_ID},
     Environment,
 };
 use err::GenError;
+use ink_extension::{InkTypeExt, InkValueExt};
 use inkwell::{
     builder::Builder,
     context::Context,
     module::Module,
-    types::{BasicType, BasicTypeEnum, StructType},
-    values::{BasicMetadataValueEnum, BasicValueEnum, InstructionValue, PointerValue},
+    types::{BasicTypeEnum, StructType},
+    values::{BasicMetadataValueEnum, BasicValueEnum, PointerValue},
+    AddressSpace,
 };
 
 pub mod env;
 pub mod err;
+pub mod ink_extension;
 pub mod primitives;
-pub mod to_meta;
 
 use crate::parser::{BinaryOp, Expression, Primary, Statement, UnaryOp};
+
+const FREE_PTR_IDENT: &str = "$freeptr";
+const COPY_PTR_IDENT: &str = "$copyptr";
 
 // TODO: Not pub
 pub struct CodeGen<'ctx> {
@@ -40,24 +45,50 @@ impl<'ctx> CodeGen<'ctx> {
         let mut env = Environment::new(module);
         self.setup_primitive_types(&mut env).unwrap();
 
-        env.push_scope();
-
         let fn_type = self.ctx.i64_type().fn_type(&[], false);
         let main_fn = env.module.add_function("main", fn_type, None);
         let entry = self.ctx.append_basic_block(main_fn, "entry");
         self.builder.position_at_end(entry);
 
-        for statement in program {
-            self.compile_statement(&statement, &mut env).unwrap();
-        }
-
-        env.pop_scope();
+        self.compile_block(&program, &mut env).unwrap();
 
         self.builder
             .build_return(Some(&self.ctx.i64_type().const_int(0, false)))
             .unwrap();
 
         return env.module;
+    }
+
+    pub fn compile_block(
+        &mut self,
+        statements: &[Statement],
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        env.push_scope();
+        for statement in statements {
+            self.preprocess_statement(&statement, env).unwrap();
+        }
+
+        for statement in statements {
+            self.compile_statement(&statement, env).unwrap();
+        }
+        env.pop_scope();
+
+        Ok(())
+    }
+
+    pub fn preprocess_statement(
+        &mut self,
+        statement: &Statement,
+        _env: &mut env::Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        match statement {
+            Statement::FunctionDeclaration { .. } => todo!(),
+            Statement::StructDefinition { .. } => todo!(),
+            _ => (),
+        };
+
+        Ok(())
     }
 
     pub fn compile_statement(
@@ -156,11 +187,7 @@ impl<'ctx> CodeGen<'ctx> {
                     .build_conditional_branch(bool_val, body_block, merge_block)?;
 
                 self.builder.position_at_end(body_block);
-                env.push_scope();
-                for statement in block {
-                    self.compile_statement(statement, env)?;
-                }
-                env.pop_scope();
+                self.compile_block(&block, env)?;
                 self.builder.build_unconditional_branch(condition_block)?;
 
                 self.builder.position_at_end(merge_block);
@@ -196,11 +223,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         // Primary/Then branch
         self.builder.position_at_end(then_block);
-        env.push_scope();
-        for statement in then_branch {
-            self.compile_statement(statement, env)?;
-        }
-        env.pop_scope();
+        self.compile_block(&then_branch, env)?;
         self.builder.build_unconditional_branch(merge_block)?;
 
         // Else If branches
@@ -235,11 +258,7 @@ impl<'ctx> CodeGen<'ctx> {
 
             // Compile branch statements
             self.builder.position_at_end(then_block);
-            env.push_scope();
-            for statement in branch {
-                self.compile_statement(statement, env)?;
-            }
-            env.pop_scope();
+            self.compile_block(&branch, env)?;
             self.builder.build_unconditional_branch(merge_block)?;
         }
 
@@ -257,11 +276,7 @@ impl<'ctx> CodeGen<'ctx> {
             )?;
 
             self.builder.position_at_end(else_block);
-            env.push_scope();
-            for statement in else_branch {
-                self.compile_statement(statement, env)?;
-            }
-            env.pop_scope();
+            self.compile_block(&else_branch, env)?;
             self.builder.build_unconditional_branch(merge_block)?;
         } else {
             // Create branch from previous block to outside the if statement
@@ -396,32 +411,56 @@ impl<'ctx> CodeGen<'ctx> {
         values.push(self.ctx.i64_type().const_int(1, false).into());
         assert_eq!(struct_type.count_fields() as usize, values.len());
 
-        let val_ptr = self.builder.build_malloc(struct_type, "literal")?; // TODO: Memory Mangement ???? MALLOC??? RC???
+        let const_values: Vec<BasicValueEnum<'ctx>> = values
+            .iter()
+            .map(|val| {
+                if val.is_const() {
+                    *val
+                } else {
+                    val.get_type().get_poison()
+                }
+            })
+            .collect();
 
-        for i in 0..struct_type.count_fields() {
-            let struct_val_ptr =
-                self.builder
-                    .build_struct_gep(struct_type, val_ptr, i, "struct_val_ptr")?;
-            self.builder
-                .build_store(struct_val_ptr, values[i as usize])?;
+        let val_ptr = self.builder.build_malloc(struct_type, "literal")?; // TODO: Memory Mangement ???? MALLOC??? RC???
+        self.builder
+            .build_store(val_ptr, struct_type.const_named_struct(&const_values))?;
+
+        for i in 1..struct_type.count_fields() {
+            let val = values[i as usize];
+            if !val.is_const() {
+                let struct_val_ptr =
+                    self.builder
+                        .build_struct_gep(struct_type, val_ptr, i, "struct_val_ptr")?;
+                self.builder.build_store(struct_val_ptr, val)?;
+            }
         }
+
+        // for i in 0..struct_type.count_fields() {
+        //     let struct_val_ptr =
+        //         self.builder
+        //             .build_struct_gep(struct_type, val_ptr, i, "struct_val_ptr")?;
+        //     self.builder
+        //         .build_store(struct_val_ptr, values[i as usize])?;
+        // }
+
         Ok(val_ptr)
     }
 
-    fn create_type(
-        &mut self,
-        ident: &str,
-        fields: &[TypeId],
-        env: &mut Environment<'ctx>,
-    ) -> Result<TypeId, GenError> {
-        let field_types = fields
-            .iter()
-            .map(|id| env.get_type(*id).ink().as_basic_type_enum())
-            .collect();
+    // fn create_type(
+    //     &mut self,
+    //     ident: &str,
+    //     fields: &[TypeId],
+    //     env: &mut Environment<'ctx>,
+    // ) -> Result<TypeId, GenError> {
+    //     let field_types = fields
+    //         .iter()
+    //         .map(|id| env.get_type(*id).ink().as_basic_type_enum())
+    //         .collect();
 
-        let struct_type = self.create_struct_type(ident, field_types);
-        env.create_type(ident, struct_type)
-    }
+    //     let struct_type = self.create_struct_type(ident, field_types);
+    //     env.create_type(ident, struct_type)
+    // }
 
     fn create_struct_type(
         &self,
@@ -455,21 +494,42 @@ impl<'ctx> CodeGen<'ctx> {
 
         let ret_type_id = fn_val.ret_type;
 
-        Ok((ret_ptr, ret_type_id))
+        Ok((ret_ptr, ret_type_id.unwrap()))
     }
 
     fn copy_pointer(
-        &self,
+        &mut self,
         ptr: PointerValue<'ctx>,
         ptr_type_id: TypeId,
-        env: &Environment<'ctx>,
+        env: &mut Environment<'ctx>,
     ) -> Result<PointerValue<'ctx>, GenError> {
-        let ptr_type = env.get_type(ptr_type_id);
-        let idx = ptr_type.ink().count_fields() - 1;
+        let fn_id = env.find_func(COPY_PTR_IDENT, Some(ptr_type_id), &[ptr_type_id])?;
+        let (ret, ..) = self.call_func(fn_id, &[ptr], env)?;
+        Ok(ret)
+    }
 
+    fn build_copy_ptr_fn(
+        &mut self,
+        type_id: TypeId,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let fn_val = env.create_func(
+            Some(type_id),
+            COPY_PTR_IDENT,
+            &[type_id],
+            Some(type_id),
+            false,
+        )?;
+        let entry = self.ctx.append_basic_block(fn_val, "entry");
+        self.builder.position_at_end(entry);
+
+        let ptr = fn_val.get_nth_param(0).unwrap().into_pointer_value();
+
+        let type_def = type_id.get_from(env);
+        let idx = type_def.ink().count_fields() - 1;
         let ref_count_ptr =
             self.builder
-                .build_struct_gep(ptr_type.ink(), ptr, idx, "refcountptr")?;
+                .build_struct_gep(type_def.ink(), ptr, idx, "refcountptr")?;
 
         let ref_count = self
             .builder
@@ -483,21 +543,44 @@ impl<'ctx> CodeGen<'ctx> {
 
         self.builder.build_store(ref_count_ptr, ref_count)?;
 
-        Ok(ptr)
+        self.builder.build_return(Some(&ptr))?;
+
+        Ok(())
     }
 
     fn destroy_pointer(
-        &self,
+        &mut self,
         ptr: PointerValue<'ctx>,
         ptr_type_id: TypeId,
-        env: &Environment<'ctx>,
+        env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let ptr_type = env.get_type(ptr_type_id);
-        let idx = ptr_type.ink().count_fields() - 1;
+        let fn_id = env.find_func(FREE_PTR_IDENT, Some(ptr_type_id), &[ptr_type_id])?;
+        self.call_func(fn_id, &[ptr], env)?;
+        Ok(())
+    }
 
+    fn build_free_ptr_fn(
+        &mut self,
+        type_id: TypeId,
+        env: &mut Environment,
+    ) -> Result<(), GenError> {
+        let fn_val = env.create_func(
+            Some(type_id),
+            FREE_PTR_IDENT,
+            &[type_id],
+            Some(NONE_ID),
+            false,
+        )?; // TODO: Optional return
+        let entry = self.ctx.append_basic_block(fn_val, "entry");
+        self.builder.position_at_end(entry);
+
+        let ptr = fn_val.get_nth_param(0).unwrap().into_pointer_value();
+
+        let type_def = type_id.get_from(env);
+        let idx = type_def.ink().count_fields() - 1;
         let ref_count_ptr =
             self.builder
-                .build_struct_gep(ptr_type.ink(), ptr, idx, "refcountptr")?;
+                .build_struct_gep(type_def.ink(), ptr, idx, "refcountptr")?;
 
         let ref_count = self
             .builder
@@ -519,21 +602,27 @@ impl<'ctx> CodeGen<'ctx> {
             "is_zero",
         )?;
 
-        let unalloc_block = self
-            .ctx
-            .insert_basic_block_after(self.builder.get_insert_block().unwrap(), "unalloc");
-        let merge_block = self
-            .ctx
-            .insert_basic_block_after(self.builder.get_insert_block().unwrap(), "continue");
+        let unalloc_block = self.ctx.insert_basic_block_after(entry, "unalloc");
+        let merge_block = self.ctx.insert_basic_block_after(unalloc_block, "continue");
 
         self.builder
             .build_conditional_branch(ref_count_zero, unalloc_block, merge_block)?;
 
         self.builder.position_at_end(unalloc_block);
         self.builder.build_free(ptr)?;
+
+        // TODO: Recursive calls
+        // for field in type_def.fields() {
+        //     let free_fn_id = env.find_func("$freeptr", Some(*field), &[*field])?;
+        //     self.call_func(free_fn_id, args, env)
+        // }
+
         self.builder.build_unconditional_branch(merge_block)?;
 
         self.builder.position_at_end(merge_block);
+        self.builder.build_return(Some(
+            &self.ctx.ptr_type(AddressSpace::default()).const_null(),
+        ))?;
 
         Ok(())
     }

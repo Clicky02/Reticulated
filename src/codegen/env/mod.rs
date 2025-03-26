@@ -100,26 +100,23 @@ impl<'ctx> Environment<'ctx> {
     }
 
     pub fn find_type(&self, ident: &str) -> Result<TypeId, GenError> {
+        dbg!(ident);
         self.type_ids
             .get(ident)
             .copied()
             .ok_or(GenError::TypeNotFound)
     }
 
-    pub fn create_type(
-        &mut self,
-        ident: &str,
-        struct_type: StructType<'ctx>,
-    ) -> Result<TypeId, GenError> {
-        if self.fn_ids.contains_key(ident) {
-            return Err(GenError::IdentConflict);
-        }
+    // pub fn create_type(
+    //     &mut self,
+    //     ident: &str,
+    //     struct_type: StructType<'ctx>,
+    // ) -> Result<TypeId, GenError> {
+    //     let type_id = self.gen_type_id();
+    //     self.register_type(ident, type_id, TypeDef::new(ident, struct_type));
 
-        let type_id = self.gen_type_id();
-        self.register_type(ident, type_id, TypeDef::new(ident, struct_type));
-
-        Ok(type_id)
-    }
+    //     Ok(type_id)
+    // }
 
     pub fn find_func(
         &self,
@@ -144,7 +141,7 @@ impl<'ctx> Environment<'ctx> {
         owner: Option<TypeId>,
         ident: &str,
         param_types: &[TypeId],
-        ret_type: TypeId,
+        ret_type: Option<TypeId>,
         is_var_args: bool,
     ) -> Result<FunctionValue<'ctx>, GenError> {
         // Ensure the owner type is the first parameter
@@ -157,7 +154,6 @@ impl<'ctx> Environment<'ctx> {
         let id = self.gen_fn_id(owner);
         let fn_name = self.create_fn_name(ident, owner, &param_types);
 
-        let ink_ret_type = self.types.get(&ret_type).ok_or(GenError::TypeNotFound)?;
         let ink_param_types = param_types
             .iter()
             .map(|id| self.types.get(id).unwrap().ink())
@@ -168,12 +164,19 @@ impl<'ctx> Environment<'ctx> {
             })
             .collect::<Vec<_>>();
 
-        let fn_type = ink_ret_type
-            .ink()
-            .get_context()
-            .ptr_type(AddressSpace::default())
-            .fn_type(&ink_param_types, is_var_args);
-        let fn_value = self.module.add_function(&fn_name, fn_type, None);
+        let ink_fn_type = if let Some(_) = ret_type {
+            self.module
+                .get_context()
+                .ptr_type(AddressSpace::default())
+                .fn_type(&ink_param_types, is_var_args)
+        } else {
+            self.module
+                .get_context()
+                .void_type()
+                .fn_type(&ink_param_types, is_var_args)
+        };
+
+        let fn_value = self.module.add_function(&fn_name, ink_fn_type, None);
 
         self.register_fn(
             &fn_name,
@@ -188,21 +191,18 @@ impl<'ctx> Environment<'ctx> {
         self.types.get(&id).unwrap().ident()
     }
 
-    pub(super) fn reserve_type_id(
-        &mut self,
-        type_id: TypeId,
-        ident: &str,
-        struct_type: StructType<'ctx>,
-    ) -> Result<(), GenError> {
-        if self.type_ids.contains_key(ident) {
+    pub fn gen_type_id(&mut self) -> TypeId {
+        let id = TypeId(self.next_type_id);
+        self.next_type_id += 1;
+        id
+    }
+
+    pub fn reserve_type_id(&mut self, type_id: TypeId, force: bool) -> Result<(), GenError> {
+        if !force && self.next_type_id > type_id.0 {
             return Err(GenError::IdentConflict);
         }
 
-        if self.next_type_id <= type_id.0 {
-            self.next_type_id = type_id.0 + 1;
-        }
-
-        self.register_type(ident, type_id, TypeDef::new(ident, struct_type));
+        self.next_type_id = type_id.0 + 1;
 
         Ok(())
     }
@@ -218,24 +218,28 @@ impl<'ctx> Environment<'ctx> {
         )
     }
 
-    fn gen_type_id(&mut self) -> TypeId {
-        let id = TypeId(self.next_type_id);
-        self.next_type_id += 1;
-        id
-    }
+    pub fn register_type(
+        &mut self,
+        ident: &str,
+        id: TypeId,
+        type_def: TypeDef<'ctx>,
+    ) -> Result<(), GenError> {
+        if self.type_ids.contains_key(ident) {
+            return Err(GenError::IdentConflict);
+        }
 
-    fn register_type(&mut self, ident: &str, id: TypeId, type_def: TypeDef<'ctx>) {
         self.type_ids.insert(ident.to_string(), id);
         self.types.insert(id, type_def);
+        Ok(())
     }
 
-    fn gen_fn_id(&mut self, owner: Option<TypeId>) -> FunctionId {
+    pub fn gen_fn_id(&mut self, owner: Option<TypeId>) -> FunctionId {
         let id = FunctionId(self.next_fn_id, owner.unwrap_or(TypeId(0)).0);
         self.next_fn_id += 1;
         id
     }
 
-    fn register_fn(&mut self, ident: &str, id: FunctionId, fn_def: FuncDef<'ctx>) {
+    pub fn register_fn(&mut self, ident: &str, id: FunctionId, fn_def: FuncDef<'ctx>) {
         self.fn_ids.insert(ident.to_string(), id);
         self.fns.insert(id, fn_def);
     }

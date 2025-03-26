@@ -1,7 +1,7 @@
 use inkwell::{types::StructType, values::BasicValue};
 
 use crate::codegen::{
-    env::{id::FLOAT_ID, Environment},
+    env::{id::FLOAT_ID, type_def::TypeDef, Environment},
     err::GenError,
     CodeGen,
 };
@@ -9,9 +9,21 @@ use crate::codegen::{
 pub const FLOAT_NAME: &str = "float";
 
 impl<'ctx> CodeGen<'ctx> {
-    pub fn setup_float_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
+    pub fn declare_float_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
         let float_struct = self.create_struct_type(FLOAT_NAME, vec![self.ctx.f64_type().into()]);
-        env.reserve_type_id(FLOAT_ID, FLOAT_NAME, float_struct)?;
+        let float_type = TypeDef::new_prim(FLOAT_NAME, float_struct);
+
+        env.reserve_type_id(FLOAT_ID, true)?;
+        env.register_type(FLOAT_NAME, FLOAT_ID, float_type)?;
+
+        Ok(())
+    }
+
+    pub fn setup_float_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
+        let float_struct = FLOAT_ID.get_from(env).ink();
+
+        self.build_free_ptr_fn(FLOAT_ID, env)?;
+        self.build_copy_ptr_fn(FLOAT_ID, env)?;
 
         // Binary
         self.setup_float_add_float(float_struct, env)?;
@@ -32,7 +44,7 @@ impl<'ctx> CodeGen<'ctx> {
             Some(FLOAT_ID),
             "__add__",
             &[FLOAT_ID, FLOAT_ID],
-            FLOAT_ID,
+            Some(FLOAT_ID),
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -64,7 +76,7 @@ impl<'ctx> CodeGen<'ctx> {
             Some(FLOAT_ID),
             "__sub__",
             &[FLOAT_ID, FLOAT_ID],
-            FLOAT_ID,
+            Some(FLOAT_ID),
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -92,7 +104,13 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(Some(FLOAT_ID), "__neg__", &[FLOAT_ID], FLOAT_ID, false)?;
+        let fn_val = env.create_func(
+            Some(FLOAT_ID),
+            "__neg__",
+            &[FLOAT_ID],
+            Some(FLOAT_ID),
+            false,
+        )?;
         self.build_primitive_unary_fn(fn_val, float_struct, float_struct, |gen, expr| {
             Ok(gen
                 .builder
