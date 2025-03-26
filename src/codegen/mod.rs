@@ -107,8 +107,12 @@ impl<'ctx> CodeGen<'ctx> {
 
                 assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
 
-                expr_ptr.set_name(identifier);
-                env.insert_var(identifier.clone(), expr_ptr, expr_type_id);
+                // TODO: Do variables need to be reference counted?
+                let ptr_type = self.ctx.ptr_type(AddressSpace::default());
+                let var_ptr = self.builder.build_alloca(ptr_type, identifier)?;
+                self.builder.build_store(var_ptr, expr_ptr)?; // Store the expression pointer in the variable.
+
+                env.insert_var(identifier.clone(), var_ptr, expr_type_id);
             }
             Statement::Assignment {
                 identifier,
@@ -117,17 +121,22 @@ impl<'ctx> CodeGen<'ctx> {
                 let (var_ptr, var_type_id) = env.get_var(identifier)?;
                 let (expr_ptr, expr_type_id) = self.compile_expression(expression, env)?;
 
-                self.destroy_pointer(var_ptr, var_type_id, env)?;
+                let old_expr_ptr = self.builder.build_load(
+                    self.ctx.ptr_type(AddressSpace::default()),
+                    var_ptr,
+                    "prev_expr_ptr",
+                )?;
+                self.destroy_pointer(old_expr_ptr.into_pointer_value(), var_type_id, env)?;
 
                 assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
 
-                env.update_var(identifier, expr_ptr)?;
+                self.builder.build_store(var_ptr, expr_ptr)?;
             }
             Statement::FunctionDeclaration {
-                identifier,
-                parameters,
-                return_identifier,
-                body,
+                identifier: _,
+                parameters: _,
+                return_identifier: _,
+                body: _,
             } => todo!(),
             Statement::ExternFunctionDeclaration {
                 identifier: _,
@@ -162,7 +171,10 @@ impl<'ctx> CodeGen<'ctx> {
 
                 self.builder.build_return(Some(&expr_val))?;
             }
-            Statement::StructDefinition { identifier, fields } => todo!(),
+            Statement::StructDefinition {
+                identifier: _,
+                fields: _,
+            } => todo!(),
             Statement::WhileLoop { condition, block } => {
                 let condition_block = self.ctx.insert_basic_block_after(
                     self.builder.get_insert_block().unwrap(),
@@ -374,8 +386,17 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
         match primary {
             Primary::Identifier(ident) => {
-                let (ptr, type_id) = env.get_var(ident)?;
-                let ptr = self.copy_pointer(ptr, type_id, env)?;
+                let (var_ptr, type_id) = env.get_var(ident)?;
+                let expr_ptr = self
+                    .builder
+                    .build_load(
+                        self.ctx.ptr_type(AddressSpace::default()),
+                        var_ptr,
+                        &(ident.to_owned() + "_val"),
+                    )?
+                    .into_pointer_value();
+
+                let ptr = self.copy_pointer(expr_ptr, type_id, env)?;
                 Ok((ptr, type_id))
             }
             Primary::Integer(val) => {
