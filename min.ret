@@ -1,6 +1,6 @@
 age: int = 1
 
-while True {
+while age < 10 {
     age = age + 1
 }
 

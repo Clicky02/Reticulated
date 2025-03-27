@@ -1,9 +1,16 @@
 use inkwell::{types::StructType, values::BasicValue};
 
-use crate::codegen::{
-    env::{id::FLOAT_ID, type_def::TypeDef, Environment},
-    err::GenError,
-    CodeGen,
+use crate::{
+    codegen::{
+        env::{
+            id::{BOOL_ID, FLOAT_ID},
+            type_def::TypeDef,
+            Environment,
+        },
+        err::GenError,
+        CodeGen,
+    },
+    parser::{BinaryOp, UnaryOp},
 };
 
 pub const FLOAT_NAME: &str = "float";
@@ -28,6 +35,12 @@ impl<'ctx> CodeGen<'ctx> {
         // Binary
         self.setup_float_add_float(float_struct, env)?;
         self.setup_float_sub_float(float_struct, env)?;
+        self.setup_float_mul_float(float_struct, env)?;
+        self.setup_float_div_float(float_struct, env)?;
+        self.setup_float_gt_float(float_struct, env)?;
+        self.setup_float_lt_float(float_struct, env)?;
+        self.setup_float_ge_float(float_struct, env)?;
+        self.setup_float_le_float(float_struct, env)?;
 
         // Unary
         self.setup_negate_float(float_struct, env)?;
@@ -42,7 +55,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let fn_val = env.create_func(
             Some(FLOAT_ID),
-            "__add__",
+            BinaryOp::Add.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
             Some(FLOAT_ID),
             false,
@@ -72,9 +85,9 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let fn_val: inkwell::values::FunctionValue<'ctx> = env.create_func(
             Some(FLOAT_ID),
-            "__sub__",
+            BinaryOp::Subtract.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
             Some(FLOAT_ID),
             false,
@@ -99,6 +112,196 @@ impl<'ctx> CodeGen<'ctx> {
         Ok(())
     }
 
+    fn setup_float_mul_float(
+        &mut self,
+        float_struct: StructType<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let fn_val = env.create_func(
+            Some(FLOAT_ID),
+            BinaryOp::Multiply.fn_name(),
+            &[FLOAT_ID, FLOAT_ID],
+            Some(FLOAT_ID),
+            false,
+        )?;
+        self.build_primitive_binary_fn(
+            fn_val,
+            float_struct,
+            float_struct,
+            float_struct,
+            |gen, left, right| {
+                Ok(gen
+                    .builder
+                    .build_float_mul(
+                        left.into_float_value(),
+                        right.into_float_value(),
+                        "float_mul",
+                    )?
+                    .as_basic_value_enum())
+            },
+        )?;
+        Ok(())
+    }
+
+    fn setup_float_div_float(
+        &mut self,
+        float_struct: StructType<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let fn_val = env.create_func(
+            Some(FLOAT_ID),
+            BinaryOp::Divide.fn_name(),
+            &[FLOAT_ID, FLOAT_ID],
+            Some(FLOAT_ID),
+            false,
+        )?;
+        self.build_primitive_binary_fn(
+            fn_val,
+            float_struct,
+            float_struct,
+            float_struct,
+            |gen, left, right| {
+                Ok(gen
+                    .builder
+                    .build_float_div(
+                        left.into_float_value(),
+                        right.into_float_value(),
+                        "float_div",
+                    )?
+                    .as_basic_value_enum())
+            },
+        )?;
+        Ok(())
+    }
+
+    fn setup_float_gt_float(
+        &mut self,
+        float_struct: StructType<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let fn_val = env.create_func(
+            Some(FLOAT_ID),
+            BinaryOp::Greater.fn_name(),
+            &[FLOAT_ID, FLOAT_ID],
+            Some(BOOL_ID),
+            false,
+        )?;
+        self.build_primitive_binary_fn(
+            fn_val,
+            float_struct,
+            float_struct,
+            env.get_type(BOOL_ID).ink(),
+            |gen, left, right| {
+                Ok(gen
+                    .builder
+                    .build_float_compare(
+                        inkwell::FloatPredicate::OGT,
+                        left.into_float_value(),
+                        right.into_float_value(),
+                        "float_gt",
+                    )?
+                    .as_basic_value_enum())
+            },
+        )?;
+        Ok(())
+    }
+
+    fn setup_float_lt_float(
+        &mut self,
+        float_struct: StructType<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let fn_val = env.create_func(
+            Some(FLOAT_ID),
+            BinaryOp::Less.fn_name(),
+            &[FLOAT_ID, FLOAT_ID],
+            Some(BOOL_ID),
+            false,
+        )?;
+        self.build_primitive_binary_fn(
+            fn_val,
+            float_struct,
+            float_struct,
+            env.get_type(BOOL_ID).ink(),
+            |gen, left, right| {
+                Ok(gen
+                    .builder
+                    .build_float_compare(
+                        inkwell::FloatPredicate::OLT,
+                        left.into_float_value(),
+                        right.into_float_value(),
+                        "float_lt",
+                    )?
+                    .as_basic_value_enum())
+            },
+        )?;
+        Ok(())
+    }
+
+    fn setup_float_ge_float(
+        &mut self,
+        float_struct: StructType<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let fn_val = env.create_func(
+            Some(FLOAT_ID),
+            BinaryOp::GreaterEqual.fn_name(),
+            &[FLOAT_ID, FLOAT_ID],
+            Some(BOOL_ID),
+            false,
+        )?;
+        self.build_primitive_binary_fn(
+            fn_val,
+            float_struct,
+            float_struct,
+            env.get_type(BOOL_ID).ink(),
+            |gen, left, right| {
+                Ok(gen
+                    .builder
+                    .build_float_compare(
+                        inkwell::FloatPredicate::OGE,
+                        left.into_float_value(),
+                        right.into_float_value(),
+                        "float_ge",
+                    )?
+                    .as_basic_value_enum())
+            },
+        )?;
+        Ok(())
+    }
+
+    fn setup_float_le_float(
+        &mut self,
+        float_struct: StructType<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let fn_val = env.create_func(
+            Some(FLOAT_ID),
+            BinaryOp::LessEqual.fn_name(),
+            &[FLOAT_ID, FLOAT_ID],
+            Some(BOOL_ID),
+            false,
+        )?;
+        self.build_primitive_binary_fn(
+            fn_val,
+            float_struct,
+            float_struct,
+            env.get_type(BOOL_ID).ink(),
+            |gen, left, right| {
+                Ok(gen
+                    .builder
+                    .build_float_compare(
+                        inkwell::FloatPredicate::OLE,
+                        left.into_float_value(),
+                        right.into_float_value(),
+                        "float_le",
+                    )?
+                    .as_basic_value_enum())
+            },
+        )?;
+        Ok(())
+    }
+
     fn setup_negate_float(
         &mut self,
         float_struct: StructType<'ctx>,
@@ -106,7 +309,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let fn_val = env.create_func(
             Some(FLOAT_ID),
-            "__neg__",
+            UnaryOp::Negate.fn_name(),
             &[FLOAT_ID],
             Some(FLOAT_ID),
             false,

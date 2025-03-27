@@ -37,17 +37,17 @@ impl BinaryOp {
         match self {
             BinaryOp::And => todo!(),
             BinaryOp::Or => todo!(),
-            BinaryOp::NotEqual => todo!(),
-            BinaryOp::Equal => todo!(),
-            BinaryOp::Greater => todo!(),
-            BinaryOp::GreaterEqual => todo!(),
-            BinaryOp::Less => todo!(),
-            BinaryOp::LessEqual => todo!(),
+            BinaryOp::NotEqual => "__ne__",
+            BinaryOp::Equal => "__eq__",
+            BinaryOp::Greater => "__gt__",
+            BinaryOp::GreaterEqual => "__ge__",
+            BinaryOp::Less => "__lt__",
+            BinaryOp::LessEqual => "__le__",
             BinaryOp::Add => "__add__",
             BinaryOp::Subtract => "__sub__",
             BinaryOp::Multiply => "__mul__",
             BinaryOp::Divide => "__truediv__",
-            BinaryOp::Modulo => todo!(),
+            BinaryOp::Modulo => "__mod__",
         }
     }
 }
