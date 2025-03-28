@@ -1,27 +1,27 @@
 use std::collections::HashMap;
 
 use fn_def::{create_fn_name, FuncDef};
-use id::{FunctionId, TypeId};
+use func::{FuncEnvironment, Scope};
+use id::{FunctionId, TypeId, INVALID_FN_ID};
 use inkwell::{
     module::Module,
-    types::{BasicMetadataTypeEnum, StructType},
+    types::BasicMetadataTypeEnum,
     values::{FunctionValue, PointerValue},
     AddressSpace,
 };
-use scope::Scope;
 use type_def::TypeDef;
 
 use super::err::GenError;
 
 pub mod fn_def;
+pub mod func;
 pub mod id;
-pub mod scope;
 pub mod type_def;
 
 #[derive(Debug)]
 pub struct Environment<'ctx> {
     pub module: Module<'ctx>,
-    pub scopes: Vec<Scope<'ctx>>,
+    pub func: FuncEnvironment<'ctx>,
 
     next_type_id: u64,
     type_ids: HashMap<String, TypeId>,
@@ -36,7 +36,7 @@ impl<'ctx> Environment<'ctx> {
     pub fn new(module: Module<'ctx>) -> Self {
         Self {
             module,
-            scopes: vec![],
+            func: FuncEnvironment::new(INVALID_FN_ID, true),
 
             next_type_id: 1,
             type_ids: HashMap::new(),
@@ -53,7 +53,7 @@ impl<'ctx> Environment<'ctx> {
     }
 
     pub fn get_var(&self, ident: &str) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
-        for scope in self.scopes.iter().rev() {
+        for scope in self.func.scopes.iter().rev() {
             if scope.variables.contains_key(ident) {
                 return Ok(scope.variables.get(ident).cloned().unwrap());
             }
@@ -63,7 +63,8 @@ impl<'ctx> Environment<'ctx> {
     }
 
     pub fn insert_var(&mut self, ident: String, var_ptr: PointerValue<'ctx>, ptr_type: TypeId) {
-        self.scopes
+        self.func
+            .scopes
             .last_mut()
             .unwrap()
             .variables
@@ -71,7 +72,7 @@ impl<'ctx> Environment<'ctx> {
     }
 
     pub fn update_var(&mut self, ident: &str, var_ptr: PointerValue<'ctx>) -> Result<(), GenError> {
-        for scope in self.scopes.iter_mut().rev() {
+        for scope in self.func.scopes.iter_mut().rev() {
             if let Some((.., type_id)) = scope.variables.get(ident) {
                 scope
                     .variables
@@ -83,12 +84,26 @@ impl<'ctx> Environment<'ctx> {
         Err(GenError::VariableNotFound)
     }
 
-    pub fn push_scope(&mut self) {
-        self.scopes.push(Scope::default());
+    /// Creates a new enviroment for a given function and returns the old environment
+    pub fn new_fn_env(&mut self, fn_id: FunctionId, is_script: bool) -> FuncEnvironment<'ctx> {
+        std::mem::replace(&mut self.func, FuncEnvironment::new(fn_id, is_script))
     }
 
-    pub fn pop_scope(&mut self) {
-        self.scopes.pop();
+    /// Sets the current function environment and returns the old environment
+    pub fn set_fn_env(&mut self, fn_env: FuncEnvironment<'ctx>) -> FuncEnvironment<'ctx> {
+        std::mem::replace(&mut self.func, fn_env)
+    }
+
+    pub fn push_scope(&mut self) {
+        self.func.scopes.push(Scope::default());
+    }
+
+    pub fn pop_scope(&mut self) -> Option<Scope<'ctx>> {
+        self.func.scopes.pop()
+    }
+
+    pub fn scope_has_returned(&self) -> bool {
+        self.func.scopes.last().unwrap().has_returned
     }
 
     pub fn get_type(&self, id: TypeId) -> &TypeDef<'ctx> {
@@ -136,14 +151,18 @@ impl<'ctx> Environment<'ctx> {
         self.fns.get(&id).unwrap()
     }
 
+    pub fn get_cur_fn(&self) -> &FuncDef<'ctx> {
+        self.get_func(self.func.fn_id)
+    }
+
     pub fn create_func(
         &mut self,
         owner: Option<TypeId>,
         ident: &str,
         param_types: &[TypeId],
-        ret_type: Option<TypeId>,
+        ret_type: TypeId,
         is_var_args: bool,
-    ) -> Result<FunctionValue<'ctx>, GenError> {
+    ) -> Result<(FunctionValue<'ctx>, FunctionId), GenError> {
         // Ensure the owner type is the first parameter
         if let Some(owner) = owner {
             if param_types.len() == 0 || param_types[0] != owner {
@@ -164,17 +183,11 @@ impl<'ctx> Environment<'ctx> {
             })
             .collect::<Vec<_>>();
 
-        let ink_fn_type = if let Some(_) = ret_type {
-            self.module
-                .get_context()
-                .ptr_type(AddressSpace::default())
-                .fn_type(&ink_param_types, is_var_args)
-        } else {
-            self.module
-                .get_context()
-                .void_type()
-                .fn_type(&ink_param_types, is_var_args)
-        };
+        let ink_fn_type = self
+            .module
+            .get_context()
+            .ptr_type(AddressSpace::default())
+            .fn_type(&ink_param_types, is_var_args);
 
         let fn_value = self.module.add_function(&fn_name, ink_fn_type, None);
 
@@ -184,7 +197,7 @@ impl<'ctx> Environment<'ctx> {
             FuncDef::new(&fn_name, fn_value, param_types.to_vec(), ret_type),
         );
 
-        Ok(fn_value)
+        Ok((fn_value, id))
     }
 
     pub fn type_id_ident(&self, id: TypeId) -> &str {

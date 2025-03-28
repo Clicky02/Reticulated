@@ -22,7 +22,7 @@ impl<'ctx> CodeGen<'ctx> {
         assert_eq!(cond_type_id, BOOL_ID); // TODO: GenError
 
         let mut cond_val = self.extract_primitive(cond_ptr, cond_type.ink())?;
-        self.destroy_pointer(cond_ptr, cond_type_id, env)?;
+        self.free_pointer(cond_ptr, cond_type_id, env)?;
 
         let mut source_block = self.builder.get_insert_block().unwrap();
         let func = source_block.get_parent().unwrap();
@@ -60,7 +60,7 @@ impl<'ctx> CodeGen<'ctx> {
             // TODO: Check boolean?
 
             cond_val = self.extract_primitive(cond_ptr, cond_type.ink())?;
-            self.destroy_pointer(cond_ptr, cond_type_id, env)?;
+            self.free_pointer(cond_ptr, cond_type_id, env)?;
 
             source_block = next_source_block;
             then_block = next_then_block;
@@ -125,7 +125,7 @@ impl<'ctx> CodeGen<'ctx> {
         let bool_val = self
             .extract_primitive(expr_ptr, expr_type.ink())?
             .into_int_value();
-        self.destroy_pointer(expr_ptr, type_id, env)?;
+        self.free_pointer(expr_ptr, type_id, env)?;
 
         self.builder
             .build_conditional_branch(bool_val, body_block, merge_block)?;

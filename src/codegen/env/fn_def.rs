@@ -30,7 +30,7 @@ pub struct FuncDef<'ctx> {
     pub ident: String,
     pub value: FunctionValue<'ctx>,
     pub params: Vec<TypeId>,
-    pub ret_type: Option<TypeId>,
+    pub ret_type: TypeId,
 }
 
 impl<'ctx> FuncDef<'ctx> {
@@ -38,7 +38,7 @@ impl<'ctx> FuncDef<'ctx> {
         ident: impl ToString,
         value: FunctionValue<'ctx>,
         params: Vec<TypeId>,
-        ret_type: Option<TypeId>,
+        ret_type: TypeId,
     ) -> Self {
         Self {
             ident: ident.to_string(),

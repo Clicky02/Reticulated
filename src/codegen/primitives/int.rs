@@ -53,11 +53,11 @@ impl<'ctx> CodeGen<'ctx> {
         int_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(INT_ID),
             BinaryOp::Add.fn_name(),
             &[INT_ID, INT_ID],
-            Some(INT_ID),
+            INT_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -81,11 +81,11 @@ impl<'ctx> CodeGen<'ctx> {
         int_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(INT_ID),
             BinaryOp::Subtract.fn_name(),
             &[INT_ID, INT_ID],
-            Some(INT_ID),
+            INT_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -109,11 +109,11 @@ impl<'ctx> CodeGen<'ctx> {
         int_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(INT_ID),
             BinaryOp::Multiply.fn_name(),
             &[INT_ID, INT_ID],
-            Some(INT_ID),
+            INT_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -136,11 +136,11 @@ impl<'ctx> CodeGen<'ctx> {
         int_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(INT_ID),
             BinaryOp::Divide.fn_name(),
             &[INT_ID, INT_ID],
-            Some(INT_ID),
+            INT_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -163,11 +163,11 @@ impl<'ctx> CodeGen<'ctx> {
         int_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(INT_ID),
             BinaryOp::Greater.fn_name(),
             &[INT_ID, INT_ID],
-            Some(BOOL_ID),
+            BOOL_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -195,11 +195,11 @@ impl<'ctx> CodeGen<'ctx> {
         int_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(INT_ID),
             BinaryOp::Less.fn_name(),
             &[INT_ID, INT_ID],
-            Some(BOOL_ID),
+            BOOL_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -227,11 +227,11 @@ impl<'ctx> CodeGen<'ctx> {
         int_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(INT_ID),
             BinaryOp::GreaterEqual.fn_name(),
             &[INT_ID, INT_ID],
-            Some(BOOL_ID),
+            BOOL_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -259,11 +259,11 @@ impl<'ctx> CodeGen<'ctx> {
         int_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(INT_ID),
             BinaryOp::LessEqual.fn_name(),
             &[INT_ID, INT_ID],
-            Some(BOOL_ID),
+            BOOL_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -291,7 +291,7 @@ impl<'ctx> CodeGen<'ctx> {
         int_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(Some(INT_ID), "__neg__", &[INT_ID], Some(INT_ID), false)?;
+        let (fn_val, ..) = env.create_func(Some(INT_ID), "__neg__", &[INT_ID], INT_ID, false)?;
         self.build_primitive_unary_fn(fn_val, int_struct, int_struct, |gen, expr| {
             Ok(gen
                 .builder

@@ -64,7 +64,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder
             .build_store(val_ptr, struct_type.const_named_struct(&const_values))?;
 
-        for i in 1..struct_type.count_fields() {
+        for i in 0..(struct_type.count_fields() - 1) {
             let val = values[i as usize];
             if !val.is_const() {
                 let struct_val_ptr =

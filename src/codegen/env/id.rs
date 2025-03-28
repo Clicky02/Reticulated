@@ -14,6 +14,8 @@ impl TypeId {
     }
 }
 
+pub const INVALID_FN_ID: FunctionId = FunctionId(0, 0);
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug)]
 pub struct FunctionId(pub(super) u64, pub(super) u64);
 

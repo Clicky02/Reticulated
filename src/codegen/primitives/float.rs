@@ -53,11 +53,11 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
             BinaryOp::Add.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
-            Some(FLOAT_ID),
+            FLOAT_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -85,11 +85,11 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val: inkwell::values::FunctionValue<'ctx> = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
             BinaryOp::Subtract.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
-            Some(FLOAT_ID),
+            FLOAT_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -117,11 +117,11 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
             BinaryOp::Multiply.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
-            Some(FLOAT_ID),
+            FLOAT_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -148,11 +148,11 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
             BinaryOp::Divide.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
-            Some(FLOAT_ID),
+            FLOAT_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -179,11 +179,11 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
             BinaryOp::Greater.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
-            Some(BOOL_ID),
+            BOOL_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -211,11 +211,11 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
             BinaryOp::Less.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
-            Some(BOOL_ID),
+            BOOL_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -243,11 +243,11 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
             BinaryOp::GreaterEqual.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
-            Some(BOOL_ID),
+            BOOL_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -275,11 +275,11 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
             BinaryOp::LessEqual.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
-            Some(BOOL_ID),
+            BOOL_ID,
             false,
         )?;
         self.build_primitive_binary_fn(
@@ -307,11 +307,11 @@ impl<'ctx> CodeGen<'ctx> {
         float_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_val = env.create_func(
+        let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
             UnaryOp::Negate.fn_name(),
             &[FLOAT_ID],
-            Some(FLOAT_ID),
+            FLOAT_ID,
             false,
         )?;
         self.build_primitive_unary_fn(fn_val, float_struct, float_struct, |gen, expr| {

@@ -6,6 +6,7 @@ pub enum GenError {
     InvalidFunctionDefinition,
     FunctionNotFound,
     TypeNotFound,
+    InvalidType,
     IdentConflict,
     VariableNotFound,
     Build(BuilderError),

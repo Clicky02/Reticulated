@@ -1,4 +1,4 @@
-use env::Environment;
+use env::{id::INT_ID, Environment};
 use err::GenError;
 use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace};
 
@@ -6,12 +6,13 @@ pub mod control;
 pub mod env;
 pub mod err;
 pub mod expr;
+pub mod func;
 pub mod ink_extension;
 pub mod primitives;
 pub mod structs;
 pub mod util;
 
-use crate::parser::Statement;
+use crate::parser::{Primary, Statement};
 
 // TODO: Not pub
 pub struct CodeGen<'ctx> {
@@ -33,16 +34,35 @@ impl<'ctx> CodeGen<'ctx> {
         let mut env = Environment::new(module);
         self.setup_primitive_types(&mut env).unwrap();
 
+        // Declare main function
         let fn_type = self.ctx.i64_type().fn_type(&[], false);
         let main_fn = env.module.add_function("main", fn_type, None);
-        let entry = self.ctx.append_basic_block(main_fn, "entry");
-        self.builder.position_at_end(entry);
+        let main_entry = self.ctx.append_basic_block(main_fn, "entry");
 
+        // Setup and compile top-level code
+        let (script_fn_val, script_fn_id) = env
+            .create_func(None, "$script", &[], INT_ID, false)
+            .unwrap();
+        let script_entry = self.ctx.append_basic_block(script_fn_val, "entry");
+        self.builder.position_at_end(script_entry);
+
+        env.new_fn_env(script_fn_id, true);
         self.compile_block(&program, &mut env).unwrap();
 
-        self.builder
-            .build_return(Some(&self.ctx.i64_type().const_int(0, false)))
+        // Create main function
+        self.builder.position_at_end(main_entry);
+        let script_result = self
+            .builder
+            .build_direct_call(script_fn_val, &[], "result")
+            .unwrap()
+            .try_as_basic_value()
+            .unwrap_left()
+            .into_pointer_value();
+        let ret_val = self
+            .extract_primitive(script_result, env.get_type(INT_ID).ink())
             .unwrap();
+
+        self.builder.build_return(Some(&ret_val)).unwrap();
 
         return env.module;
     }
@@ -60,7 +80,18 @@ impl<'ctx> CodeGen<'ctx> {
         for statement in statements {
             self.compile_statement(&statement, env).unwrap();
         }
-        env.pop_scope();
+
+        let prev_scope = env.pop_scope().unwrap();
+
+        if !prev_scope.has_returned {
+            self.free_vars_in_scope(&prev_scope, env)?;
+
+            // Make sure every script always returns
+            if env.func.scopes.len() == 0 && env.func.is_script {
+                let (ret_val, ..) = self.compile_primary(&Primary::Integer(0), env)?;
+                self.builder.build_return(Some(&ret_val))?;
+            }
+        }
 
         Ok(())
     }
@@ -68,15 +99,18 @@ impl<'ctx> CodeGen<'ctx> {
     pub fn preprocess_statement(
         &mut self,
         statement: &Statement,
-        _env: &mut env::Environment<'ctx>,
+        env: &mut env::Environment<'ctx>,
     ) -> Result<(), GenError> {
         match statement {
-            Statement::FunctionDeclaration { .. } => todo!(),
+            Statement::FunctionDeclaration {
+                identifier,
+                parameters,
+                return_identifier,
+                body,
+            } => self.preprocess_fn(identifier, parameters, return_identifier, body, env),
             Statement::StructDefinition { .. } => todo!(),
-            _ => (),
-        };
-
-        Ok(())
+            _ => Ok(()),
+        }
     }
 
     pub fn compile_statement(
@@ -114,38 +148,31 @@ impl<'ctx> CodeGen<'ctx> {
                     var_ptr,
                     "prev_expr_ptr",
                 )?;
-                self.destroy_pointer(old_expr_ptr.into_pointer_value(), var_type_id, env)?;
+                self.free_pointer(old_expr_ptr.into_pointer_value(), var_type_id, env)?;
 
                 assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
 
                 self.builder.build_store(var_ptr, expr_ptr)?;
             }
             Statement::FunctionDeclaration {
-                identifier: _,
-                parameters: _,
-                return_identifier: _,
-                body: _,
-            } => todo!(),
+                identifier,
+                parameters,
+                return_identifier,
+                body,
+            } => {
+                self.compile_fn(identifier, parameters, return_identifier, body, env)?;
+            }
             Statement::ExternFunctionDeclaration {
                 identifier: _,
                 parameters: _,
                 return_identifier: _,
             } => todo!(),
             Statement::ReturnStatement { expression: expr } => {
-                let (expr_ptr, expr_type_id) = self.compile_expression(expr, env)?;
-                let expr_type = env.get_type(expr_type_id);
-                let mut expr_val = self.builder.build_load(expr_type.ink(), expr_ptr, "tmp")?;
-
-                // At main function
-                if env.scopes.len() == 1 {
-                    expr_val = self.extract_primitive(expr_ptr, expr_type.ink())?;
-                }
-
-                self.builder.build_return(Some(&expr_val))?;
+                self.compile_return(expr, env)?;
             }
             Statement::Expression(expression) => {
                 let (ptr, ptr_type_id) = self.compile_expression(expression, env)?;
-                self.destroy_pointer(ptr, ptr_type_id, env)?;
+                self.free_pointer(ptr, ptr_type_id, env)?;
             }
             Statement::IfStatement {
                 condition,

@@ -14,7 +14,7 @@ use super::{
 };
 
 impl<'ctx> CodeGen<'ctx> {
-    pub fn compile_expression(
+    pub(super) fn compile_expression(
         &mut self,
         expression: &Expression,
         env: &mut Environment<'ctx>,
@@ -65,8 +65,8 @@ impl<'ctx> CodeGen<'ctx> {
 
         let ret = self.call_func(op_func_id, &[left_ptr, right_ptr], env)?;
 
-        self.destroy_pointer(left_ptr, left_type, env)?;
-        self.destroy_pointer(right_ptr, right_type, env)?;
+        self.free_pointer(left_ptr, left_type, env)?;
+        self.free_pointer(right_ptr, right_type, env)?;
 
         Ok(ret)
     }
@@ -83,12 +83,12 @@ impl<'ctx> CodeGen<'ctx> {
 
         let ret = self.call_func(op_func_id, &[expr_ptr], env)?;
 
-        self.destroy_pointer(expr_ptr, expr_type, env)?;
+        self.free_pointer(expr_ptr, expr_type, env)?;
 
         Ok(ret)
     }
 
-    fn compile_primary(
+    pub(super) fn compile_primary(
         &mut self,
         primary: &Primary,
         env: &mut Environment<'ctx>,
