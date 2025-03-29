@@ -62,6 +62,8 @@ impl<'ctx> CodeGen<'ctx> {
             .extract_primitive(script_result, env.get_type(INT_ID).ink())
             .unwrap();
 
+        self.free_pointer(script_result, INT_ID, &env).unwrap();
+
         self.builder.build_return(Some(&ret_val)).unwrap();
 
         return env.module;

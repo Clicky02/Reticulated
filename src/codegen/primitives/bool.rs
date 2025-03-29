@@ -4,6 +4,8 @@ use crate::codegen::{
     CodeGen,
 };
 
+use super::primitive_unalloc;
+
 pub const BOOL_NAME: &str = "bool";
 
 impl<'ctx> CodeGen<'ctx> {
@@ -20,7 +22,7 @@ impl<'ctx> CodeGen<'ctx> {
     pub fn setup_bool_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
         let _bool_struct = BOOL_ID.get_from(env).ink();
 
-        self.build_free_ptr_fn(BOOL_ID, env)?;
+        self.build_free_ptr_fn(BOOL_ID, primitive_unalloc, env)?;
         self.build_copy_ptr_fn(BOOL_ID, env)?;
 
         Ok(())

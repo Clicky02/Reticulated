@@ -4,6 +4,7 @@ pub const NONE_ID: TypeId = TypeId(0);
 pub const INT_ID: TypeId = TypeId(1);
 pub const FLOAT_ID: TypeId = TypeId(2);
 pub const BOOL_ID: TypeId = TypeId(3);
+pub const STR_ID: TypeId = TypeId(4);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug)]
 pub struct TypeId(pub(super) u64);

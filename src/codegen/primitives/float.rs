@@ -13,6 +13,8 @@ use crate::{
     parser::{BinaryOp, UnaryOp},
 };
 
+use super::primitive_unalloc;
+
 pub const FLOAT_NAME: &str = "float";
 
 impl<'ctx> CodeGen<'ctx> {
@@ -29,7 +31,7 @@ impl<'ctx> CodeGen<'ctx> {
     pub fn setup_float_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
         let float_struct = FLOAT_ID.get_from(env).ink();
 
-        self.build_free_ptr_fn(FLOAT_ID, env)?;
+        self.build_free_ptr_fn(FLOAT_ID, primitive_unalloc, env)?;
         self.build_copy_ptr_fn(FLOAT_ID, env)?;
 
         // Binary

@@ -1,14 +1,20 @@
 use inkwell::{
+    builder::Builder,
     types::StructType,
     values::{BasicValueEnum, FunctionValue, PointerValue},
 };
 
-use super::{env::Environment, err::GenError, CodeGen};
+use super::{
+    env::{id::TypeId, Environment},
+    err::GenError,
+    CodeGen,
+};
 
 pub mod bool;
 pub mod float;
 pub mod int;
 pub mod none;
+pub mod string;
 
 impl<'ctx> CodeGen<'ctx> {
     pub(super) fn setup_primitive_types(
@@ -19,11 +25,13 @@ impl<'ctx> CodeGen<'ctx> {
         self.declare_float_primitive(env)?;
         self.declare_bool_primitive(env)?;
         self.declare_none_primitive(env)?;
+        self.declare_str_primitive(env)?;
 
         self.setup_int_primitive(env)?;
         self.setup_float_primitive(env)?;
         self.setup_bool_primitive(env)?;
         self.setup_none_primitive(env)?;
+        self.setup_str_primitive(env)?;
 
         Ok(())
     }
@@ -58,6 +66,27 @@ impl<'ctx> CodeGen<'ctx> {
         self.extract_primitive(param_ptr, prim_struct)
     }
 
+    fn build_binary_fn(
+        &mut self,
+        fn_val: FunctionValue<'ctx>,
+        build_op_fn: impl FnOnce(
+            &mut Self,
+            PointerValue<'ctx>,
+            PointerValue<'ctx>,
+        ) -> Result<PointerValue<'ctx>, GenError>,
+    ) -> Result<(), GenError> {
+        let entry = self.ctx.append_basic_block(fn_val, "entry");
+        self.builder.position_at_end(entry);
+
+        let left = fn_val.get_nth_param(0).unwrap().into_pointer_value();
+        let right = fn_val.get_nth_param(1).unwrap().into_pointer_value();
+
+        let result_ptr = build_op_fn(self, left, right)?;
+
+        self.builder.build_return(Some(&result_ptr))?;
+        Ok(())
+    }
+
     fn build_primitive_binary_fn(
         &mut self,
         fn_val: FunctionValue<'ctx>,
@@ -70,17 +99,12 @@ impl<'ctx> CodeGen<'ctx> {
             BasicValueEnum<'ctx>,
         ) -> Result<BasicValueEnum<'ctx>, GenError>,
     ) -> Result<(), GenError> {
-        let entry = self.ctx.append_basic_block(fn_val, "entry");
-        self.builder.position_at_end(entry);
-
-        let left = self.get_primitive_from_param(0, fn_val, left_type)?;
-        let right = self.get_primitive_from_param(1, fn_val, right_type)?;
-
-        let result_val = build_op_fn(self, left, right)?;
-
-        let ptr = self.build_struct(ret_type, vec![result_val])?;
-        self.builder.build_return(Some(&ptr))?;
-        Ok(())
+        self.build_binary_fn(fn_val, |gen, left, right| {
+            let left = gen.extract_primitive(left, left_type)?;
+            let right = gen.extract_primitive(right, right_type)?;
+            let result_val = build_op_fn(gen, left, right)?;
+            gen.build_struct(ret_type, vec![result_val])
+        })
     }
 
     fn build_primitive_unary_fn(
@@ -104,4 +128,13 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.build_return(Some(&ptr))?;
         Ok(())
     }
+}
+
+fn primitive_unalloc(
+    _ptr: PointerValue<'_>,
+    _type_id: TypeId,
+    _builder: &mut Builder<'_>,
+    _env: &mut Environment<'_>,
+) -> Result<(), GenError> {
+    Ok(())
 }

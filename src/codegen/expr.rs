@@ -6,7 +6,7 @@ use crate::parser::{BinaryOp, Expression, Primary, UnaryOp};
 
 use super::{
     env::{
-        id::{TypeId, BOOL_ID, FLOAT_ID, INT_ID},
+        id::{TypeId, BOOL_ID, FLOAT_ID, INT_ID, STR_ID},
         Environment,
     },
     err::GenError,
@@ -120,7 +120,28 @@ impl<'ctx> CodeGen<'ctx> {
                 let ptr = self.build_struct(float_type.ink(), vec![inner_float.into()])?;
                 Ok((ptr, FLOAT_ID))
             }
-            Primary::String(..) => todo!(),
+            Primary::String(val) => {
+                let string_type = env.get_type(STR_ID);
+
+                // let str_len = val.len() + 1;
+                let char_type = self.ctx.i8_type();
+                let array_type = char_type.array_type(val.len() as u32);
+                let ptr_str_data = self.builder.build_malloc(array_type, "ptr_str_data")?;
+                let str_data = char_type.const_array(
+                    &val.bytes()
+                        .map(|byte| char_type.const_int(byte as u64, false))
+                        .collect::<Vec<_>>(),
+                );
+                self.builder.build_store(ptr_str_data, str_data)?;
+
+                let str_size = self.ctx.i64_type().const_int(val.len() as u64, false);
+                let ptr = self.build_struct(
+                    string_type.ink(),
+                    vec![ptr_str_data.into(), str_size.into()],
+                )?;
+
+                Ok((ptr, STR_ID))
+            }
             Primary::Bool(val) => {
                 let bool_type = env.get_type(BOOL_ID);
                 let inner_bool = self.ctx.bool_type().const_int((*val) as u64, false);

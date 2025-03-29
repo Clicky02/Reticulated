@@ -1,11 +1,10 @@
-def add_one(val: int) -> int {
-    return val + 1
+age: str = "hi :)"
+age2: str = "hi :)"
+
+bob: bool = age == age2
+
+if bob {
+    return 1
 }
 
-age: int = 1
-
-while age < 10000000 {
-    age = add_one(age)
-}
-
-return age
+return 0

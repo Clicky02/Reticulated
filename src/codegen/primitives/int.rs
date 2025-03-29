@@ -13,6 +13,8 @@ use crate::{
     parser::BinaryOp,
 };
 
+use super::primitive_unalloc;
+
 pub const INT_NAME: &str = "int";
 
 impl<'ctx> CodeGen<'ctx> {
@@ -29,7 +31,7 @@ impl<'ctx> CodeGen<'ctx> {
     pub fn setup_int_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
         let int_struct = INT_ID.get_from(env).ink();
 
-        self.build_free_ptr_fn(INT_ID, env)?;
+        self.build_free_ptr_fn(INT_ID, primitive_unalloc, env)?;
         self.build_copy_ptr_fn(INT_ID, env)?;
 
         // Binary
@@ -271,7 +273,7 @@ impl<'ctx> CodeGen<'ctx> {
             int_struct,
             int_struct,
             env.get_type(BOOL_ID).ink(),
-            |gen, left, right| {
+            |gen: &mut CodeGen<'ctx>, left, right| {
                 Ok(gen
                     .builder
                     .build_int_compare(

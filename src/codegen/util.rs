@@ -1,4 +1,5 @@
 use inkwell::{
+    builder::Builder,
     values::{BasicMetadataValueEnum, PointerValue},
     AddressSpace,
 };
@@ -29,7 +30,7 @@ impl<'ctx> CodeGen<'ctx> {
             .collect();
 
         let fn_val = fn_id.get_from(env);
-        let ret_val = self.builder.build_call(fn_val.ink(), &param_vals, "")?;
+        let ret_val = self.builder.build_call(fn_val.ink(), &param_vals, "_")?;
         let ret_ptr = ret_val
             .try_as_basic_value()
             .unwrap_left()
@@ -98,7 +99,13 @@ impl<'ctx> CodeGen<'ctx> {
     pub(super) fn build_free_ptr_fn(
         &mut self,
         type_id: TypeId,
-        env: &mut Environment,
+        custom_unalloc: impl FnOnce(
+            PointerValue<'ctx>,
+            TypeId,
+            &mut Builder<'ctx>,
+            &mut Environment<'ctx>,
+        ) -> Result<(), GenError>,
+        env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let (fn_val, ..) =
             env.create_func(Some(type_id), FREE_PTR_IDENT, &[type_id], NONE_ID, false)?; // TODO: Optional return
@@ -140,13 +147,9 @@ impl<'ctx> CodeGen<'ctx> {
             .build_conditional_branch(ref_count_zero, unalloc_block, merge_block)?;
 
         self.builder.position_at_end(unalloc_block);
-        self.builder.build_free(ptr)?;
 
-        // TODO: Recursive calls
-        // for field in type_def.fields() {
-        //     let free_fn_id = env.find_func("$freeptr", Some(*field), &[*field])?;
-        //     self.call_func(free_fn_id, args, env)
-        // }
+        custom_unalloc(ptr, type_id, &mut self.builder, env)?;
+        self.builder.build_free(ptr)?; // DO NOT USE MEMORY AFTER FREE
 
         self.builder.build_unconditional_branch(merge_block)?;
 
