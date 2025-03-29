@@ -2,13 +2,13 @@ use env::{id::INT_ID, Environment};
 use err::GenError;
 use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace};
 
+pub mod builtin;
 pub mod control;
 pub mod env;
 pub mod err;
 pub mod expr;
 pub mod func;
 pub mod ink_extension;
-pub mod primitives;
 pub mod structs;
 pub mod util;
 
