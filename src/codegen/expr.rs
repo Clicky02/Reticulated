@@ -123,7 +123,6 @@ impl<'ctx> CodeGen<'ctx> {
             Primary::String(val) => {
                 let string_type = env.get_type(STR_ID);
 
-                // let str_len = val.len() + 1;
                 let char_type = self.ctx.i8_type();
                 let array_type = char_type.array_type(val.len() as u32);
                 let ptr_str_data = self.builder.build_malloc(array_type, "ptr_str_data")?;

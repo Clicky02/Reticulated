@@ -35,13 +35,14 @@ impl<'ctx> CodeGen<'ctx> {
     }
 
     pub fn setup_str_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
-        let str_struct = STR_ID.get_from(env).ink();
+        let str_struct_type = STR_ID.get_from(env).ink();
 
         self.build_free_ptr_fn(STR_ID, str_unalloc, env)?;
         self.build_copy_ptr_fn(STR_ID, env)?;
 
         // Binary Functions
-        self.setup_str_eq_str(str_struct, env)?;
+        self.setup_str_eq_str(str_struct_type, env)?;
+        self.setup_str_add_str(str_struct_type, env)?;
 
         Ok(())
     }
@@ -135,6 +136,68 @@ impl<'ctx> CodeGen<'ctx> {
 
             gen.builder.position_at_end(merge_branch);
             gen.build_struct(bool_struct_type, vec![result_val.as_basic_value()])
+        })
+    }
+
+    fn setup_str_add_str(
+        &mut self,
+        str_struct_type: StructType<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let (fn_val, ..) = env.create_func(
+            Some(STR_ID),
+            BinaryOp::Add.fn_name(),
+            &[STR_ID, STR_ID],
+            STR_ID,
+            false,
+        )?;
+
+        let char_type = self.char_type();
+
+        self.build_binary_fn(fn_val, |gen, left, right| {
+            let (left_str_ptr, left_str_len) = gen.build_extract_string(left, str_struct_type)?;
+            let (right_str_ptr, right_str_len) =
+                gen.build_extract_string(right, str_struct_type)?;
+
+            let str_data_size =
+                gen.builder
+                    .build_int_add(left_str_len, right_str_len, "new_str_data_size")?;
+
+            let str_data_ptr =
+                gen.builder
+                    .build_array_malloc(char_type, str_data_size, "new_str_data_ptr")?;
+
+            // Copy left into string data
+            // TODO: figure out if there's a better way to determine alignment
+            gen.builder.build_memcpy(
+                str_data_ptr,
+                1, // dest_align_bytes
+                left_str_ptr,
+                1, // src_align_bytes
+                left_str_len,
+            )?;
+
+            // Copy right into string data
+            let str_data_ptr_to_right = unsafe {
+                gen.builder.build_gep(
+                    char_type,
+                    str_data_ptr,
+                    &[left_str_len],
+                    "str_data_ptr_to_right",
+                )?
+            };
+            gen.builder.build_memcpy(
+                str_data_ptr_to_right,
+                1, // dest_align_bytes
+                right_str_ptr,
+                1, // src_align_bytes
+                right_str_len,
+            )?;
+
+            gen.build_struct(
+                str_struct_type,
+                vec![str_data_ptr.into(), str_data_size.into()],
+            )
         })
     }
 

@@ -1,10 +1,8 @@
-age: str = "hi :)"
-age2: str = "hi :("
+name: str = "Bob"
+greeting: str = "Hi, " + name + "!"
 
-bob: bool = age == age2
-
-if bob {
-    return 1
+if greeting == "Hi, Bob!" {
+    return 0
 }
 
-return 0
+return 1
