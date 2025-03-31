@@ -3,17 +3,17 @@ use inkwell::{types::StructType, values::BasicValue};
 use crate::{
     codegen::{
         env::{
-            id::{BOOL_ID, INT_ID},
+            id::{BOOL_ID, INT_ID, STR_ID},
             type_def::TypeDef,
             Environment,
         },
         err::GenError,
         CodeGen,
     },
-    parser::BinaryOp,
+    parser::{BinaryOp, UnaryOp},
 };
 
-use super::primitive_unalloc;
+use super::{c_functions::CFunctions, primitive_unalloc, TO_STR_FN};
 
 pub const INT_NAME: &str = "int";
 
@@ -28,7 +28,11 @@ impl<'ctx> CodeGen<'ctx> {
         Ok(())
     }
 
-    pub fn setup_int_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
+    pub fn setup_int_primitive(
+        &mut self,
+        cfns: &CFunctions<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
         let int_struct = INT_ID.get_from(env).ink();
 
         self.build_free_ptr_fn(INT_ID, primitive_unalloc, env)?;
@@ -46,6 +50,9 @@ impl<'ctx> CodeGen<'ctx> {
 
         // Unary
         self.setup_negate_int(int_struct, env)?;
+
+        // Conversion
+        self.setup_int_to_str(int_struct, cfns, env)?;
 
         Ok(())
     }
@@ -293,7 +300,13 @@ impl<'ctx> CodeGen<'ctx> {
         int_struct: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) = env.create_func(Some(INT_ID), "__neg__", &[INT_ID], INT_ID, false)?;
+        let (fn_val, ..) = env.create_func(
+            Some(INT_ID),
+            UnaryOp::Negate.fn_name(),
+            &[INT_ID],
+            INT_ID,
+            false,
+        )?;
         self.build_primitive_unary_fn(fn_val, int_struct, int_struct, |gen, expr| {
             Ok(gen
                 .builder
@@ -301,6 +314,17 @@ impl<'ctx> CodeGen<'ctx> {
                 .as_basic_value_enum())
         })?;
 
+        Ok(())
+    }
+
+    fn setup_int_to_str(
+        &mut self,
+        int_struct: StructType<'ctx>,
+        cfns: &CFunctions<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let (fn_val, ..) = env.create_func(Some(INT_ID), TO_STR_FN, &[INT_ID], STR_ID, false)?;
+        self.build_primitive_to_str_fn("int", fn_val, int_struct, "%ld", cfns, env)?;
         Ok(())
     }
 }

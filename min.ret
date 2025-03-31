@@ -1,6 +1,13 @@
 name: str = "Bob"
 greeting: str = "Hi, " + name + "!"
 
+age: int = 1
+
+while age < 18 {
+    age = age + 1
+}
+
 print(greeting)
+print("You are " + str(age) + " years old!")
 
 return 1

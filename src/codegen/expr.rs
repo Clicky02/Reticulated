@@ -5,6 +5,7 @@ use inkwell::{values::PointerValue, AddressSpace};
 use crate::parser::{BinaryOp, Expression, Primary, UnaryOp};
 
 use super::{
+    builtin::{TO_BOOL_FN, TO_FLOAT_FN, TO_INT_FN, TO_STR_FN},
     env::{
         id::{TypeId, BOOL_ID, FLOAT_ID, INT_ID, STR_ID},
         Environment,
@@ -45,7 +46,13 @@ impl<'ctx> CodeGen<'ctx> {
             .collect::<Result<Vec<_>, GenError>>()?;
         let (param_vals, param_types): (Vec<_>, Vec<_>) = params.into_iter().unzip();
 
-        let fn_id = env.find_func(ident, None, &param_types)?;
+        let fn_id = match ident.as_str() {
+            "str" => env.find_func(TO_STR_FN, param_types.get(0).copied(), &param_types)?,
+            "int" => env.find_func(TO_INT_FN, param_types.get(0).copied(), &param_types)?,
+            "float" => env.find_func(TO_FLOAT_FN, param_types.get(0).copied(), &param_types)?,
+            "bool" => env.find_func(TO_BOOL_FN, param_types.get(0).copied(), &param_types)?,
+            _ => env.find_func(ident, None, &param_types)?,
+        };
 
         self.call_func(fn_id, &param_vals, env)
     }

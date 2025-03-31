@@ -1,3 +1,4 @@
+use c_functions::CFunctions;
 use inkwell::{
     builder::Builder,
     types::StructType,
@@ -11,6 +12,7 @@ use super::{
 };
 
 pub mod bool;
+pub mod c_functions;
 pub mod float;
 pub mod functions;
 pub mod int;
@@ -24,19 +26,21 @@ pub const TO_FLOAT_FN: &str = "__float__";
 
 impl<'ctx> CodeGen<'ctx> {
     pub(super) fn setup_builtins(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
+        let cfns = self.setup_llvm_c_functions(env);
+
         self.declare_int_primitive(env)?;
         self.declare_float_primitive(env)?;
         self.declare_bool_primitive(env)?;
         self.declare_none_primitive(env)?;
         self.declare_str_primitive(env)?;
 
-        self.setup_int_primitive(env)?;
+        self.setup_int_primitive(&cfns, env)?;
         self.setup_float_primitive(env)?;
         self.setup_bool_primitive(env)?;
         self.setup_none_primitive(env)?;
         self.setup_str_primitive(env)?;
 
-        self.setup_functions(env)?;
+        self.setup_functions(&cfns, env)?;
 
         Ok(())
     }
@@ -55,20 +59,6 @@ impl<'ctx> CodeGen<'ctx> {
             val_ptr,
             "primitive",
         )?)
-    }
-
-    fn get_primitive_from_param(
-        &mut self,
-        param_idx: u32,
-        fn_val: FunctionValue<'ctx>,
-        prim_struct: StructType<'ctx>,
-    ) -> Result<BasicValueEnum<'ctx>, GenError> {
-        let param_ptr = fn_val
-            .get_nth_param(param_idx)
-            .unwrap()
-            .into_pointer_value();
-
-        self.extract_primitive(param_ptr, prim_struct)
     }
 
     fn build_binary_fn(
@@ -112,6 +102,22 @@ impl<'ctx> CodeGen<'ctx> {
         })
     }
 
+    fn build_unary_fn(
+        &mut self,
+        fn_val: FunctionValue<'ctx>,
+        build_op_fn: impl FnOnce(&mut Self, PointerValue<'ctx>) -> Result<PointerValue<'ctx>, GenError>,
+    ) -> Result<(), GenError> {
+        let entry = self.ctx.append_basic_block(fn_val, "entry");
+        self.builder.position_at_end(entry);
+
+        let param = fn_val.get_nth_param(0).unwrap().into_pointer_value();
+
+        let result_ptr = build_op_fn(self, param)?;
+
+        self.builder.build_return(Some(&result_ptr))?;
+        Ok(())
+    }
+
     fn build_primitive_unary_fn(
         &mut self,
         fn_val: FunctionValue<'ctx>,
@@ -122,16 +128,56 @@ impl<'ctx> CodeGen<'ctx> {
             BasicValueEnum<'ctx>,
         ) -> Result<BasicValueEnum<'ctx>, GenError>,
     ) -> Result<(), GenError> {
-        let entry = self.ctx.append_basic_block(fn_val, "entry");
-        self.builder.position_at_end(entry);
+        self.build_unary_fn(fn_val, |gen, param| {
+            let param = gen.extract_primitive(param, expr_type)?;
+            let result_val = build_op_fn(gen, param)?;
+            gen.build_struct(ret_type, vec![result_val])
+        })
+    }
 
-        let expr = self.get_primitive_from_param(0, fn_val, expr_type)?;
+    fn build_primitive_to_str_fn(
+        &mut self,
+        type_name: &str,
+        fn_val: FunctionValue<'ctx>,
+        expr_type: StructType<'ctx>,
+        format_spec_str: &str,
+        cfns: &CFunctions<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let format_spec = self
+            .builder
+            .build_global_string_ptr(
+                format_spec_str,
+                &(type_name.to_owned() + "_format_specifier"),
+            )?
+            .as_pointer_value();
 
-        let result_val = build_op_fn(self, expr)?;
+        self.build_unary_fn(fn_val, |gen, param| {
+            let prim = gen.extract_primitive(param, expr_type)?;
 
-        let ptr = self.build_struct(ret_type, vec![result_val])?;
-        self.builder.build_return(Some(&ptr))?;
-        Ok(())
+            let str_size = gen.build_get_string_size(format_spec, prim, cfns)?;
+            let cstr_size = gen.builder.build_int_add(
+                str_size,
+                gen.len_type().const_int(1, false),
+                "str_size",
+            )?;
+
+            let str_data_ptr = gen.build_str_data_malloc(cstr_size, "new_str_data_ptr")?;
+
+            // load data into str
+            gen.builder.build_call(
+                cfns.snprintf,
+                &[
+                    str_data_ptr.into(),
+                    cstr_size.into(),
+                    format_spec.into(),
+                    prim.into(),
+                ],
+                "_",
+            )?;
+
+            gen.build_str_struct(str_data_ptr, str_size, env)
+        })
     }
 }
 

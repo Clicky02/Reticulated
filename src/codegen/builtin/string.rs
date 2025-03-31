@@ -163,9 +163,7 @@ impl<'ctx> CodeGen<'ctx> {
                 gen.builder
                     .build_int_add(left_str_len, right_str_len, "new_str_data_size")?;
 
-            let str_data_ptr =
-                gen.builder
-                    .build_array_malloc(char_type, str_data_size, "new_str_data_ptr")?;
+            let str_data_ptr = gen.build_str_data_malloc(str_data_size, "new_str_data_ptr")?;
 
             // Copy left into string data
             // TODO: figure out if there's a better way to determine alignment
@@ -194,10 +192,7 @@ impl<'ctx> CodeGen<'ctx> {
                 right_str_len,
             )?;
 
-            gen.build_struct(
-                str_struct_type,
-                vec![str_data_ptr.into(), str_data_size.into()],
-            )
+            gen.build_str_struct(str_data_ptr, str_data_size, env)
         })
     }
 
@@ -241,6 +236,28 @@ impl<'ctx> CodeGen<'ctx> {
             .builder
             .build_load(char_type, char_ptr, "char_val")?
             .into_int_value())
+    }
+
+    pub(super) fn build_str_data_malloc(
+        &mut self,
+        size: IntValue<'ctx>,
+        name: &str,
+    ) -> Result<PointerValue<'ctx>, GenError> {
+        Ok(self
+            .builder
+            .build_array_malloc(self.char_type(), size, name)?)
+    }
+
+    pub fn build_str_struct(
+        &mut self,
+        str_data_ptr: PointerValue<'ctx>,
+        str_data_size: IntValue<'ctx>,
+        env: &Environment<'ctx>,
+    ) -> Result<PointerValue<'ctx>, GenError> {
+        self.build_struct(
+            STR_ID.get_from(env).ink(),
+            vec![str_data_ptr.into(), str_data_size.into()],
+        )
     }
 
     pub(super) fn char_type(&self) -> IntType<'ctx> {
