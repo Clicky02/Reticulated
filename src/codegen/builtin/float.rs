@@ -1,4 +1,4 @@
-use inkwell::{types::StructType, values::BasicValue};
+use inkwell::{types::{FloatType, StructType}, values::BasicValue};
 
 use crate::{
     codegen::{
@@ -343,5 +343,9 @@ impl<'ctx> CodeGen<'ctx> {
             env.create_func(Some(FLOAT_ID), TO_STR_FN, &[FLOAT_ID], STR_ID, false)?;
         self.build_primitive_to_str_fn("float", fn_val, float_struct, "%lf", cfns, env)?;
         Ok(())
+    }
+
+    pub fn prim_float_type(&mut self) -> FloatType<'ctx> {
+        self.ctx.f64_type()
     }
 }

@@ -8,7 +8,7 @@ use inkwell::{
 use crate::{
     codegen::{
         env::{
-            id::{TypeId, BOOL_ID, INT_ID, STR_ID},
+            id::{TypeId, BOOL_ID, FLOAT_ID, INT_ID, STR_ID},
             type_def::TypeDef,
             Environment,
         },
@@ -18,7 +18,7 @@ use crate::{
     parser::BinaryOp,
 };
 
-use super::{c_functions::CFunctions, TO_INT_FN};
+use super::{c_functions::CFunctions, TO_FLOAT_FN, TO_INT_FN};
 
 pub const STR_NAME: &str = "str";
 
@@ -52,6 +52,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         // Conversion Functions
         self.setup_str_to_int(str_struct_type, &cfns, env)?;
+        self.setup_str_to_float(str_struct_type, &cfns, env)?;
 
         Ok(())
     }
@@ -246,6 +247,50 @@ impl<'ctx> CodeGen<'ctx> {
             Ok(int_struct_ptr)
         })
     }
+
+    fn setup_str_to_float(
+        &mut self,
+        str_struct: StructType<'ctx>,
+        cfns: &CFunctions<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let (fn_val, ..) = env.create_func(Some(STR_ID), TO_FLOAT_FN, &[STR_ID], FLOAT_ID, false)?;
+
+        let float_struct = FLOAT_ID.get_from(env).ink();
+        let float_type = self.prim_float_type();
+
+        self.build_unary_fn(fn_val, |gen, val| {
+            let (str_ptr, str_len) = gen.build_extract_string(val, str_struct)?;
+
+            // TODO: Make a shared global constant for format specifiers
+            let format_spec = gen
+                .builder
+                .build_global_string_ptr("%lf", "str_to_float_format_specifier")?
+                .as_pointer_value();
+
+            let float_struct_ptr =
+                gen.build_struct(float_struct, vec![float_type.const_float(0.0).into()])?;
+            let float_data_ptr =
+                gen.builder
+                    .build_struct_gep(float_struct, float_struct_ptr, 0, "float_data")?;
+
+            // call sscanf
+            // TODO: Throw exception if does not match
+            gen.builder.build_call(
+                cfns.sscanf,
+                &[
+                    str_ptr.into(),
+                    format_spec.into(),
+                    float_data_ptr.into(),
+                    str_len.into(),
+                ],
+                "_",
+            )?;
+
+            Ok(float_struct_ptr)
+        })
+    }
+
     pub(super) fn build_extract_string(
         &self,
         struct_ptr: PointerValue<'ctx>,
