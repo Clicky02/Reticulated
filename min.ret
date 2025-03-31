@@ -1,8 +1,6 @@
 name: str = "Bob"
 greeting: str = "Hi, " + name + "!"
 
-if greeting == "Hi, Bob!" {
-    return 0
-}
+print(greeting)
 
 return 1

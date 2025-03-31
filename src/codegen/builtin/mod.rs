@@ -12,15 +12,18 @@ use super::{
 
 pub mod bool;
 pub mod float;
+pub mod functions;
 pub mod int;
 pub mod none;
 pub mod string;
 
+pub const TO_STR_FN: &str = "__str__";
+pub const TO_BOOL_FN: &str = "__bool__";
+pub const TO_INT_FN: &str = "__int__";
+pub const TO_FLOAT_FN: &str = "__float__";
+
 impl<'ctx> CodeGen<'ctx> {
-    pub(super) fn setup_primitive_types(
-        &mut self,
-        env: &mut Environment<'ctx>,
-    ) -> Result<(), GenError> {
+    pub(super) fn setup_builtins(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
         self.declare_int_primitive(env)?;
         self.declare_float_primitive(env)?;
         self.declare_bool_primitive(env)?;
@@ -32,6 +35,8 @@ impl<'ctx> CodeGen<'ctx> {
         self.setup_bool_primitive(env)?;
         self.setup_none_primitive(env)?;
         self.setup_str_primitive(env)?;
+
+        self.setup_functions(env)?;
 
         Ok(())
     }

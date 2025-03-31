@@ -201,7 +201,7 @@ impl<'ctx> CodeGen<'ctx> {
         })
     }
 
-    fn build_extract_string(
+    pub(super) fn build_extract_string(
         &self,
         struct_ptr: PointerValue<'ctx>,
         str_type: StructType<'ctx>,
@@ -243,15 +243,15 @@ impl<'ctx> CodeGen<'ctx> {
             .into_int_value())
     }
 
-    fn char_type(&self) -> IntType<'ctx> {
+    pub(super) fn char_type(&self) -> IntType<'ctx> {
         self.ctx.i8_type()
     }
 
-    fn len_type(&self) -> IntType<'ctx> {
+    pub(super) fn len_type(&self) -> IntType<'ctx> {
         self.ctx.i64_type()
     }
 
-    fn str_ptr_type(&self) -> PointerType<'ctx> {
+    pub(super) fn str_ptr_type(&self) -> PointerType<'ctx> {
         self.ctx.ptr_type(AddressSpace::default())
     }
 }

@@ -1,7 +1,6 @@
 use inkwell::{
     builder::Builder,
     values::{BasicMetadataValueEnum, PointerValue},
-    AddressSpace,
 };
 
 use super::{
@@ -85,6 +84,23 @@ impl<'ctx> CodeGen<'ctx> {
         Ok(())
     }
 
+    pub(super) fn build_noop_copy_ptr_fn(
+        &mut self,
+        type_id: TypeId,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let (fn_val, ..) =
+            env.create_func(Some(type_id), COPY_PTR_IDENT, &[type_id], type_id, false)?;
+        let entry = self.ctx.append_basic_block(fn_val, "entry");
+        self.builder.position_at_end(entry);
+
+        let ptr = fn_val.get_nth_param(0).unwrap().into_pointer_value();
+
+        self.builder.build_return(Some(&ptr))?;
+
+        Ok(())
+    }
+
     pub(super) fn free_pointer(
         &mut self,
         ptr: PointerValue<'ctx>,
@@ -155,10 +171,24 @@ impl<'ctx> CodeGen<'ctx> {
 
         self.builder.position_at_end(merge_block);
 
-        // TODO: Change this to actually return None
-        self.builder.build_return(Some(
-            &self.ctx.ptr_type(AddressSpace::default()).const_null(),
-        ))?;
+        let none = self.build_none(env)?;
+        self.builder.build_return(Some(&none))?;
+
+        Ok(())
+    }
+
+    pub(super) fn build_noop_free_ptr_fn(
+        &mut self,
+        type_id: TypeId,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let (fn_val, ..) =
+            env.create_func(Some(type_id), FREE_PTR_IDENT, &[type_id], NONE_ID, false)?; // TODO: Optional return
+        let entry = self.ctx.append_basic_block(fn_val, "entry");
+        self.builder.position_at_end(entry);
+
+        let none = self.build_none(env)?;
+        self.builder.build_return(Some(&none))?;
 
         Ok(())
     }

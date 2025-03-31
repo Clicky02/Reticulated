@@ -31,13 +31,14 @@ impl<'ctx> CodeGen<'ctx> {
     pub fn gen_code_for(&mut self, program: Vec<Statement>) -> Module<'ctx> {
         let module = self.ctx.create_module("main");
 
-        let mut env = Environment::new(module);
-        self.setup_primitive_types(&mut env).unwrap();
-
         // Declare main function
         let fn_type = self.ctx.i64_type().fn_type(&[], false);
-        let main_fn = env.module.add_function("main", fn_type, None);
+        let main_fn = module.add_function("main", fn_type, None);
         let main_entry = self.ctx.append_basic_block(main_fn, "entry");
+
+        // Setup environment
+        let mut env = Environment::new(module);
+        self.setup_builtins(&mut env).unwrap();
 
         // Setup and compile top-level code
         let (script_fn_val, script_fn_id) = env
