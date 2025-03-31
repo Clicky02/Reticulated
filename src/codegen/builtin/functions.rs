@@ -36,7 +36,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         let format_spec = self
             .builder
-            .build_global_string_ptr("%.*s", "print_string_format")?
+            .build_global_string_ptr("%.*s\n", "print_string_format")?
             .as_pointer_value();
 
         self.builder.build_call(
