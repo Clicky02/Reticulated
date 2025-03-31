@@ -18,7 +18,7 @@ use crate::{
     parser::BinaryOp,
 };
 
-use super::{c_functions::CFunctions, TO_FLOAT_FN, TO_INT_FN};
+use super::{c_functions::CFunctions, TO_BOOL_FN, TO_FLOAT_FN, TO_INT_FN};
 
 pub const STR_NAME: &str = "str";
 
@@ -53,6 +53,7 @@ impl<'ctx> CodeGen<'ctx> {
         // Conversion Functions
         self.setup_str_to_int(str_struct_type, &cfns, env)?;
         self.setup_str_to_float(str_struct_type, &cfns, env)?;
+        self.setup_str_to_bool(str_struct_type, &cfns, env)?;
 
         Ok(())
     }
@@ -288,6 +289,22 @@ impl<'ctx> CodeGen<'ctx> {
             )?;
 
             Ok(float_struct_ptr)
+        })
+    }
+
+    fn setup_str_to_bool(
+        &mut self,
+        _str_struct: StructType<'ctx>,
+        _cfns: &CFunctions<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let (fn_val, ..) = env.create_func(Some(STR_ID), TO_BOOL_FN, &[STR_ID], BOOL_ID, false)?;
+
+        self.build_unary_fn(fn_val, |gen, val| {
+            let eq_fn = env.find_func(BinaryOp::Equal.fn_name(), Some(STR_ID), &[STR_ID, STR_ID])?;
+            let true_str = gen.build_str_const("True", env)?;
+            let (is_eq, ..) = gen.call_func(eq_fn, &[val, true_str], env)?;
+            Ok(is_eq)
         })
     }
 
