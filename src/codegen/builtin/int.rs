@@ -1,4 +1,7 @@
-use inkwell::{types::StructType, values::BasicValue};
+use inkwell::{
+    types::{IntType, StructType},
+    values::BasicValue,
+};
 
 use crate::{
     codegen::{
@@ -326,5 +329,9 @@ impl<'ctx> CodeGen<'ctx> {
         let (fn_val, ..) = env.create_func(Some(INT_ID), TO_STR_FN, &[INT_ID], STR_ID, false)?;
         self.build_primitive_to_str_fn("int", fn_val, int_struct, "%ld", cfns, env)?;
         Ok(())
+    }
+
+    pub fn prim_int_type(&mut self) -> IntType<'ctx> {
+        self.ctx.i64_type()
     }
 }

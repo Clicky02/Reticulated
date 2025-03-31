@@ -3,13 +3,16 @@ greeting: str = "Hi, " + name + "!"
 
 age: int = 1
 
-while age < 18 {
-    age = age + 1
+while age > -18 {
+    age = age - 1
 }
 
 print(greeting)
 print("You are " + str(age) + " years old!")
 print(str(True))
 print(str(9.718979))
+print(str(int("-10")))
+print(str(int("10.1")))
+print(str(int("a")))
 
 return 1

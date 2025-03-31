@@ -8,7 +8,7 @@ use inkwell::{
 use crate::{
     codegen::{
         env::{
-            id::{TypeId, BOOL_ID, STR_ID},
+            id::{TypeId, BOOL_ID, INT_ID, STR_ID},
             type_def::TypeDef,
             Environment,
         },
@@ -17,6 +17,8 @@ use crate::{
     },
     parser::BinaryOp,
 };
+
+use super::{c_functions::CFunctions, TO_INT_FN};
 
 pub const STR_NAME: &str = "str";
 
@@ -34,7 +36,11 @@ impl<'ctx> CodeGen<'ctx> {
         Ok(())
     }
 
-    pub fn setup_str_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
+    pub fn setup_str_primitive(
+        &mut self,
+        cfns: &CFunctions<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
         let str_struct_type = STR_ID.get_from(env).ink();
 
         self.build_free_ptr_fn(STR_ID, str_unalloc, env)?;
@@ -43,6 +49,9 @@ impl<'ctx> CodeGen<'ctx> {
         // Binary Functions
         self.setup_str_eq_str(str_struct_type, env)?;
         self.setup_str_add_str(str_struct_type, env)?;
+
+        // Conversion Functions
+        self.setup_str_to_int(str_struct_type, &cfns, env)?;
 
         Ok(())
     }
@@ -196,6 +205,47 @@ impl<'ctx> CodeGen<'ctx> {
         })
     }
 
+    fn setup_str_to_int(
+        &mut self,
+        str_struct: StructType<'ctx>,
+        cfns: &CFunctions<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let (fn_val, ..) = env.create_func(Some(STR_ID), TO_INT_FN, &[STR_ID], INT_ID, false)?;
+
+        let int_struct = INT_ID.get_from(env).ink();
+        let int_type = self.prim_int_type();
+
+        self.build_unary_fn(fn_val, |gen, val| {
+            let (str_ptr, str_len) = gen.build_extract_string(val, str_struct)?;
+
+            let format_spec = gen
+                .builder
+                .build_global_string_ptr("%ld", "str_to_int_format_specifier")?
+                .as_pointer_value();
+
+            let int_struct_ptr =
+                gen.build_struct(int_struct, vec![int_type.const_int(0, false).into()])?;
+            let int_data_ptr =
+                gen.builder
+                    .build_struct_gep(int_struct, int_struct_ptr, 0, "int_data")?;
+
+            // call sscanf
+            // TODO: Throw exception if does not match
+            gen.builder.build_call(
+                cfns.sscanf,
+                &[
+                    str_ptr.into(),
+                    format_spec.into(),
+                    int_data_ptr.into(),
+                    str_len.into(),
+                ],
+                "_",
+            )?;
+
+            Ok(int_struct_ptr)
+        })
+    }
     pub(super) fn build_extract_string(
         &self,
         struct_ptr: PointerValue<'ctx>,

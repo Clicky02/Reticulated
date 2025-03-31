@@ -38,7 +38,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.setup_float_primitive(&cfns, env)?;
         self.setup_bool_primitive(&cfns, env)?;
         self.setup_none_primitive(env)?;
-        self.setup_str_primitive(env)?;
+        self.setup_str_primitive(&cfns, env)?;
 
         self.setup_functions(&cfns, env)?;
 
