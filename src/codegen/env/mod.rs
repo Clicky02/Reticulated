@@ -115,7 +115,6 @@ impl<'ctx> Environment<'ctx> {
     }
 
     pub fn find_type(&self, ident: &str) -> Result<TypeId, GenError> {
-        dbg!(ident);
         self.type_ids
             .get(ident)
             .copied()

@@ -128,24 +128,7 @@ impl<'ctx> CodeGen<'ctx> {
                 Ok((ptr, FLOAT_ID))
             }
             Primary::String(val) => {
-                let string_type = env.get_type(STR_ID);
-
-                let char_type = self.ctx.i8_type();
-                let array_type = char_type.array_type(val.len() as u32);
-                let ptr_str_data = self.builder.build_malloc(array_type, "ptr_str_data")?;
-                let str_data = char_type.const_array(
-                    &val.bytes()
-                        .map(|byte| char_type.const_int(byte as u64, false))
-                        .collect::<Vec<_>>(),
-                );
-                self.builder.build_store(ptr_str_data, str_data)?;
-
-                let str_size = self.ctx.i64_type().const_int(val.len() as u64, false);
-                let ptr = self.build_struct(
-                    string_type.ink(),
-                    vec![ptr_str_data.into(), str_size.into()],
-                )?;
-
+                let ptr = self.build_str_const(val, env)?;
                 Ok((ptr, STR_ID))
             }
             Primary::Bool(val) => {

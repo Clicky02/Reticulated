@@ -3,7 +3,7 @@ use inkwell::{types::StructType, values::BasicValue};
 use crate::{
     codegen::{
         env::{
-            id::{BOOL_ID, FLOAT_ID},
+            id::{BOOL_ID, FLOAT_ID, STR_ID},
             type_def::TypeDef,
             Environment,
         },
@@ -13,7 +13,7 @@ use crate::{
     parser::{BinaryOp, UnaryOp},
 };
 
-use super::primitive_unalloc;
+use super::{c_functions::CFunctions, primitive_unalloc, TO_STR_FN};
 
 pub const FLOAT_NAME: &str = "float";
 
@@ -28,7 +28,11 @@ impl<'ctx> CodeGen<'ctx> {
         Ok(())
     }
 
-    pub fn setup_float_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
+    pub fn setup_float_primitive(
+        &mut self,
+        cfns: &CFunctions<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
         let float_struct = FLOAT_ID.get_from(env).ink();
 
         self.build_free_ptr_fn(FLOAT_ID, primitive_unalloc, env)?;
@@ -46,6 +50,9 @@ impl<'ctx> CodeGen<'ctx> {
 
         // Unary
         self.setup_negate_float(float_struct, env)?;
+
+        // Conversion
+        self.setup_float_to_str(float_struct, cfns, env)?;
 
         Ok(())
     }
@@ -323,6 +330,18 @@ impl<'ctx> CodeGen<'ctx> {
                 .as_basic_value_enum())
         })?;
 
+        Ok(())
+    }
+
+    fn setup_float_to_str(
+        &mut self,
+        float_struct: StructType<'ctx>,
+        cfns: &CFunctions<'ctx>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let (fn_val, ..) =
+            env.create_func(Some(FLOAT_ID), TO_STR_FN, &[FLOAT_ID], STR_ID, false)?;
+        self.build_primitive_to_str_fn("float", fn_val, float_struct, "%lf", cfns, env)?;
         Ok(())
     }
 }
