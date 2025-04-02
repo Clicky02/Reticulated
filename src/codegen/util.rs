@@ -199,7 +199,11 @@ impl<'ctx> CodeGen<'ctx> {
         env: &Environment<'ctx>,
     ) -> Result<(), GenError> {
         for (var, var_type_id) in scope.variables().values() {
-            self.free_pointer(*var, *var_type_id, env)?;
+            let var_val = self
+                .builder
+                .build_load(self.ptr_type(), *var, "loaded_var")?
+                .into_pointer_value();
+            self.free_pointer(var_val, *var_type_id, env)?;
         }
         Ok(())
     }

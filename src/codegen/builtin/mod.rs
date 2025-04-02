@@ -181,7 +181,7 @@ impl<'ctx> CodeGen<'ctx> {
         })
     }
 
-    fn ptr_type(&self) -> PointerType<'ctx> {
+    pub(super) fn ptr_type(&self) -> PointerType<'ctx> {
         self.ctx.ptr_type(AddressSpace::default())
     }
 }
