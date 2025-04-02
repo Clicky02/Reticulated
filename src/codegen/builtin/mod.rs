@@ -1,9 +1,10 @@
-use c_functions::CFunctions;
 use inkwell::{
     builder::Builder,
-    types::StructType,
+    types::{PointerType, StructType},
     values::{BasicValueEnum, FunctionValue, PointerValue},
+    AddressSpace,
 };
+use llvm_resources::LLVMResources;
 
 use super::{
     env::{id::TypeId, Environment},
@@ -12,10 +13,10 @@ use super::{
 };
 
 pub mod bool;
-pub mod c_functions;
 pub mod float;
 pub mod functions;
 pub mod int;
+pub mod llvm_resources;
 pub mod none;
 pub mod string;
 
@@ -26,7 +27,7 @@ pub const TO_FLOAT_FN: &str = "__float__";
 
 impl<'ctx> CodeGen<'ctx> {
     pub(super) fn setup_builtins(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
-        let cfns = self.setup_llvm_c_functions(env);
+        let res = self.setup_llvm_resources(env)?;
 
         self.declare_int_primitive(env)?;
         self.declare_float_primitive(env)?;
@@ -34,13 +35,13 @@ impl<'ctx> CodeGen<'ctx> {
         self.declare_none_primitive(env)?;
         self.declare_str_primitive(env)?;
 
-        self.setup_int_primitive(&cfns, env)?;
-        self.setup_float_primitive(&cfns, env)?;
-        self.setup_bool_primitive(&cfns, env)?;
+        self.setup_int_primitive(&res, env)?;
+        self.setup_float_primitive(&res, env)?;
+        self.setup_bool_primitive(&res, env)?;
         self.setup_none_primitive(env)?;
-        self.setup_str_primitive(&cfns, env)?;
+        self.setup_str_primitive(&res, env)?;
 
-        self.setup_functions(&cfns, env)?;
+        self.setup_functions(&res, env)?;
 
         Ok(())
     }
@@ -141,7 +142,7 @@ impl<'ctx> CodeGen<'ctx> {
         fn_val: FunctionValue<'ctx>,
         expr_type: StructType<'ctx>,
         format_spec_str: &str,
-        cfns: &CFunctions<'ctx>,
+        res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let format_spec = self
@@ -155,7 +156,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.build_unary_fn(fn_val, |gen, param| {
             let prim = gen.extract_primitive(param, expr_type)?;
 
-            let str_size = gen.build_get_string_size(format_spec, prim, cfns)?;
+            let str_size = gen.build_get_string_size(format_spec, prim, res)?;
             let cstr_size = gen.builder.build_int_add(
                 str_size,
                 gen.len_type().const_int(1, false),
@@ -166,7 +167,7 @@ impl<'ctx> CodeGen<'ctx> {
 
             // load data into str
             gen.builder.build_call(
-                cfns.snprintf,
+                res.snprintf,
                 &[
                     str_data_ptr.into(),
                     cstr_size.into(),
@@ -178,6 +179,10 @@ impl<'ctx> CodeGen<'ctx> {
 
             gen.build_str_struct(str_data_ptr, str_size, env)
         })
+    }
+
+    fn ptr_type(&self) -> PointerType<'ctx> {
+        self.ctx.ptr_type(AddressSpace::default())
     }
 }
 

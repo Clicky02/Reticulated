@@ -10,7 +10,7 @@ use crate::codegen::{
     CodeGen,
 };
 
-use super::{c_functions::CFunctions, primitive_unalloc, TO_STR_FN};
+use super::{llvm_resources::LLVMResources, primitive_unalloc, TO_STR_FN};
 
 pub const BOOL_NAME: &str = "bool";
 
@@ -27,7 +27,7 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn setup_bool_primitive(
         &mut self,
-        cfns: &CFunctions<'ctx>,
+        res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let bool_struct = BOOL_ID.get_from(env).ink();
@@ -36,7 +36,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.build_copy_ptr_fn(BOOL_ID, env)?;
 
         // Conversion
-        self.setup_bool_to_str(bool_struct, cfns, env)?;
+        self.setup_bool_to_str(bool_struct, res, env)?;
 
         Ok(())
     }
@@ -44,7 +44,7 @@ impl<'ctx> CodeGen<'ctx> {
     fn setup_bool_to_str(
         &mut self,
         bool_struct: StructType<'ctx>,
-        _cfns: &CFunctions<'ctx>,
+        _res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(Some(BOOL_ID), TO_STR_FN, &[BOOL_ID], STR_ID, false)?;

@@ -35,6 +35,7 @@ impl<'ctx> CodeGen<'ctx> {
         let fn_type = self.ctx.i64_type().fn_type(&[], false);
         let main_fn = module.add_function("main", fn_type, None);
         let main_entry = self.ctx.append_basic_block(main_fn, "entry");
+        self.builder.position_at_end(main_entry);
 
         // Setup environment
         let mut env = Environment::new(module);

@@ -13,7 +13,7 @@ use crate::{
     parser::{BinaryOp, UnaryOp},
 };
 
-use super::{c_functions::CFunctions, primitive_unalloc, TO_STR_FN};
+use super::{llvm_resources::LLVMResources, primitive_unalloc, TO_STR_FN};
 
 pub const FLOAT_NAME: &str = "float";
 
@@ -30,7 +30,7 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn setup_float_primitive(
         &mut self,
-        cfns: &CFunctions<'ctx>,
+        res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let float_struct = FLOAT_ID.get_from(env).ink();
@@ -52,7 +52,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.setup_negate_float(float_struct, env)?;
 
         // Conversion
-        self.setup_float_to_str(float_struct, cfns, env)?;
+        self.setup_float_to_str(float_struct, res, env)?;
 
         Ok(())
     }
@@ -336,12 +336,12 @@ impl<'ctx> CodeGen<'ctx> {
     fn setup_float_to_str(
         &mut self,
         float_struct: StructType<'ctx>,
-        cfns: &CFunctions<'ctx>,
+        res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let (fn_val, ..) =
             env.create_func(Some(FLOAT_ID), TO_STR_FN, &[FLOAT_ID], STR_ID, false)?;
-        self.build_primitive_to_str_fn("float", fn_val, float_struct, "%lf", cfns, env)?;
+        self.build_primitive_to_str_fn("float", fn_val, float_struct, "%lf", res, env)?;
         Ok(())
     }
 

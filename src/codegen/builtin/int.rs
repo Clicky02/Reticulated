@@ -16,7 +16,7 @@ use crate::{
     parser::{BinaryOp, UnaryOp},
 };
 
-use super::{c_functions::CFunctions, primitive_unalloc, TO_STR_FN};
+use super::{llvm_resources::LLVMResources, primitive_unalloc, TO_STR_FN};
 
 pub const INT_NAME: &str = "int";
 
@@ -33,7 +33,7 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn setup_int_primitive(
         &mut self,
-        cfns: &CFunctions<'ctx>,
+        res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let int_struct = INT_ID.get_from(env).ink();
@@ -55,7 +55,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.setup_negate_int(int_struct, env)?;
 
         // Conversion
-        self.setup_int_to_str(int_struct, cfns, env)?;
+        self.setup_int_to_str(int_struct, res, env)?;
 
         Ok(())
     }
@@ -323,15 +323,15 @@ impl<'ctx> CodeGen<'ctx> {
     fn setup_int_to_str(
         &mut self,
         int_struct: StructType<'ctx>,
-        cfns: &CFunctions<'ctx>,
+        res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(Some(INT_ID), TO_STR_FN, &[INT_ID], STR_ID, false)?;
-        self.build_primitive_to_str_fn("int", fn_val, int_struct, "%ld", cfns, env)?;
+        self.build_primitive_to_str_fn("int", fn_val, int_struct, "%ld", res, env)?;
         Ok(())
     }
 
-    pub fn prim_int_type(&mut self) -> IntType<'ctx> {
+    pub fn prim_int_type(&self) -> IntType<'ctx> {
         self.ctx.i64_type()
     }
 }

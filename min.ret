@@ -7,6 +7,10 @@ while age > -18 {
     age = age - 1
 }
 
+test: str = input("Input: ")
+
+print(test)
+
 print(greeting)
 print("You are " + str(age) + " years old!")
 print(str(True))

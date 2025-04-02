@@ -18,7 +18,7 @@ use crate::{
     parser::BinaryOp,
 };
 
-use super::{c_functions::CFunctions, TO_BOOL_FN, TO_FLOAT_FN, TO_INT_FN};
+use super::{llvm_resources::LLVMResources, TO_BOOL_FN, TO_FLOAT_FN, TO_INT_FN};
 
 pub const STR_NAME: &str = "str";
 
@@ -38,7 +38,7 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn setup_str_primitive(
         &mut self,
-        cfns: &CFunctions<'ctx>,
+        res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let str_struct_type = STR_ID.get_from(env).ink();
@@ -51,9 +51,9 @@ impl<'ctx> CodeGen<'ctx> {
         self.setup_str_add_str(str_struct_type, env)?;
 
         // Conversion Functions
-        self.setup_str_to_int(str_struct_type, &cfns, env)?;
-        self.setup_str_to_float(str_struct_type, &cfns, env)?;
-        self.setup_str_to_bool(str_struct_type, &cfns, env)?;
+        self.setup_str_to_int(str_struct_type, &res, env)?;
+        self.setup_str_to_float(str_struct_type, &res, env)?;
+        self.setup_str_to_bool(str_struct_type, &res, env)?;
 
         Ok(())
     }
@@ -210,7 +210,7 @@ impl<'ctx> CodeGen<'ctx> {
     fn setup_str_to_int(
         &mut self,
         str_struct: StructType<'ctx>,
-        cfns: &CFunctions<'ctx>,
+        res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(Some(STR_ID), TO_INT_FN, &[STR_ID], INT_ID, false)?;
@@ -235,7 +235,7 @@ impl<'ctx> CodeGen<'ctx> {
             // call sscanf
             // TODO: Throw exception if does not match
             gen.builder.build_call(
-                cfns.sscanf,
+                res.sscanf,
                 &[
                     str_ptr.into(),
                     format_spec.into(),
@@ -252,7 +252,7 @@ impl<'ctx> CodeGen<'ctx> {
     fn setup_str_to_float(
         &mut self,
         str_struct: StructType<'ctx>,
-        cfns: &CFunctions<'ctx>,
+        res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(Some(STR_ID), TO_FLOAT_FN, &[STR_ID], FLOAT_ID, false)?;
@@ -278,7 +278,7 @@ impl<'ctx> CodeGen<'ctx> {
             // call sscanf
             // TODO: Throw exception if does not match
             gen.builder.build_call(
-                cfns.sscanf,
+                res.sscanf,
                 &[
                     str_ptr.into(),
                     format_spec.into(),
@@ -295,7 +295,7 @@ impl<'ctx> CodeGen<'ctx> {
     fn setup_str_to_bool(
         &mut self,
         _str_struct: StructType<'ctx>,
-        _cfns: &CFunctions<'ctx>,
+        _res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(Some(STR_ID), TO_BOOL_FN, &[STR_ID], BOOL_ID, false)?;
