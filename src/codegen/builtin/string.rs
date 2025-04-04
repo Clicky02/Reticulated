@@ -1,5 +1,4 @@
 use inkwell::{
-    builder::Builder,
     types::{IntType, PointerType, StructType},
     values::{IntValue, PointerValue},
     AddressSpace,
@@ -255,7 +254,8 @@ impl<'ctx> CodeGen<'ctx> {
         res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) = env.create_func(Some(STR_ID), TO_FLOAT_FN, &[STR_ID], FLOAT_ID, false)?;
+        let (fn_val, ..) =
+            env.create_func(Some(STR_ID), TO_FLOAT_FN, &[STR_ID], FLOAT_ID, false)?;
 
         let float_struct = FLOAT_ID.get_from(env).ink();
         let float_type = self.prim_float_type();
@@ -301,7 +301,8 @@ impl<'ctx> CodeGen<'ctx> {
         let (fn_val, ..) = env.create_func(Some(STR_ID), TO_BOOL_FN, &[STR_ID], BOOL_ID, false)?;
 
         self.build_unary_fn(fn_val, |gen, val| {
-            let eq_fn = env.find_func(BinaryOp::Equal.fn_name(), Some(STR_ID), &[STR_ID, STR_ID])?;
+            let eq_fn =
+                env.find_func(BinaryOp::Equal.fn_name(), Some(STR_ID), &[STR_ID, STR_ID])?;
             let true_str = gen.build_str_const("True", env)?;
             let (is_eq, ..) = gen.call_func(eq_fn, &[val, true_str], env)?;
             Ok(is_eq)
@@ -413,18 +414,21 @@ impl<'ctx> CodeGen<'ctx> {
 fn str_unalloc(
     ptr: PointerValue<'_>,
     type_id: TypeId,
-    builder: &mut Builder<'_>,
+    gen: &mut CodeGen<'_>,
     env: &mut Environment<'_>,
 ) -> Result<(), GenError> {
     let ink_type = type_id.get_from(env).ink();
-    let ptr_ptr_str = builder.build_struct_gep(ink_type, ptr, 0, "ptr_ptr_str_data")?;
-    let ptr_str = builder
+    let ptr_ptr_str = gen
+        .builder
+        .build_struct_gep(ink_type, ptr, 0, "ptr_ptr_str_data")?;
+    let ptr_str = gen
+        .builder
         .build_load(
             ink_type.get_field_type_at_index(0).unwrap(),
             ptr_ptr_str,
             "ptr_str_data",
         )?
         .into_pointer_value();
-    builder.build_free(ptr_str)?;
+    gen.builder.build_free(ptr_str)?;
     Ok(())
 }

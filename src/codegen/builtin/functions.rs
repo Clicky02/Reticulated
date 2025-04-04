@@ -1,5 +1,3 @@
-use inkwell::{values::BasicMetadataValueEnum, AddressSpace};
-
 use crate::codegen::{
     env::{
         id::{NONE_ID, STR_ID},
@@ -165,37 +163,6 @@ impl<'ctx> CodeGen<'ctx> {
             .build_int_cast(new_size, self.prim_int_type(), "str_size")?;
         let new_str_ptr = self.build_str_struct(new_buffer, final_size, env)?;
         self.builder.build_return(Some(&new_str_ptr))?;
-
-        Ok(())
-    }
-
-    fn debug(
-        &mut self,
-        format: &str,
-        val: BasicMetadataValueEnum<'ctx>,
-        res: &LLVMResources<'ctx>,
-    ) -> Result<(), GenError> {
-        let debug_format_spec = self
-            .builder
-            .build_global_string_ptr(format, "debug")?
-            .as_pointer_value();
-
-        self.builder
-            .build_call(res.printf, &[debug_format_spec.into(), val], "_")
-            .unwrap();
-
-        Ok(())
-    }
-
-    fn debug_print(&mut self, format: &str, res: &LLVMResources<'ctx>) -> Result<(), GenError> {
-        let debug_format_spec = self
-            .builder
-            .build_global_string_ptr(format, "debug")?
-            .as_pointer_value();
-
-        self.builder
-            .build_call(res.printf, &[debug_format_spec.into()], "_")
-            .unwrap();
 
         Ok(())
     }

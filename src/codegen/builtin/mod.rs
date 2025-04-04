@@ -1,5 +1,4 @@
 use inkwell::{
-    builder::Builder,
     types::{PointerType, StructType},
     values::{BasicValueEnum, FunctionValue, PointerValue},
     AddressSpace,
@@ -189,7 +188,7 @@ impl<'ctx> CodeGen<'ctx> {
 fn primitive_unalloc(
     _ptr: PointerValue<'_>,
     _type_id: TypeId,
-    _builder: &mut Builder<'_>,
+    _builder: &mut CodeGen<'_>,
     _env: &mut Environment<'_>,
 ) -> Result<(), GenError> {
     Ok(())

@@ -1,5 +1,6 @@
-test: str = input("Input: ")
-print(test)
+struct TestStruct {
+    test_int: int,
+    test_str: str,
+}
 
-print(str(9))
-return 0
+test: TestStruct = TestStruct(1, "a")

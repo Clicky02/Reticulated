@@ -1,9 +1,7 @@
-use inkwell::{
-    builder::Builder,
-    values::{BasicMetadataValueEnum, PointerValue},
-};
+use inkwell::values::{BasicMetadataValueEnum, PointerValue};
 
 use super::{
+    builtin::llvm_resources::LLVMResources,
     env::{
         func::Scope,
         id::{FunctionId, TypeId, NONE_ID},
@@ -13,8 +11,8 @@ use super::{
     CodeGen,
 };
 
-const FREE_PTR_IDENT: &str = "$freeptr";
-const COPY_PTR_IDENT: &str = "$copyptr";
+pub const FREE_PTR_IDENT: &str = "$freeptr";
+pub const COPY_PTR_IDENT: &str = "$copyptr";
 
 impl<'ctx> CodeGen<'ctx> {
     pub(super) fn call_func(
@@ -118,7 +116,7 @@ impl<'ctx> CodeGen<'ctx> {
         custom_unalloc: impl FnOnce(
             PointerValue<'ctx>,
             TypeId,
-            &mut Builder<'ctx>,
+            &mut Self,
             &mut Environment<'ctx>,
         ) -> Result<(), GenError>,
         env: &mut Environment<'ctx>,
@@ -164,7 +162,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         self.builder.position_at_end(unalloc_block);
 
-        custom_unalloc(ptr, type_id, &mut self.builder, env)?;
+        custom_unalloc(ptr, type_id, self, env)?;
         self.builder.build_free(ptr)?; // DO NOT USE MEMORY AFTER FREE
 
         self.builder.build_unconditional_branch(merge_block)?;
@@ -205,6 +203,43 @@ impl<'ctx> CodeGen<'ctx> {
                 .into_pointer_value();
             self.free_pointer(var_val, *var_type_id, env)?;
         }
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn debug(
+        &mut self,
+        format: &str,
+        val: BasicMetadataValueEnum<'ctx>,
+        res: &LLVMResources<'ctx>,
+    ) -> Result<(), GenError> {
+        let debug_format_spec = self
+            .builder
+            .build_global_string_ptr(format, "debug")?
+            .as_pointer_value();
+
+        self.builder
+            .build_call(res.printf, &[debug_format_spec.into(), val], "_")
+            .unwrap();
+
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn debug_print(
+        &mut self,
+        format: &str,
+        res: &LLVMResources<'ctx>,
+    ) -> Result<(), GenError> {
+        let debug_format_spec = self
+            .builder
+            .build_global_string_ptr(format, "debug")?
+            .as_pointer_value();
+
+        self.builder
+            .build_call(res.printf, &[debug_format_spec.into()], "_")
+            .unwrap();
+
         Ok(())
     }
 }

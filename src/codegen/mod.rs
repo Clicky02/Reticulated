@@ -112,7 +112,9 @@ impl<'ctx> CodeGen<'ctx> {
                 return_identifier,
                 body,
             } => self.preprocess_fn(identifier, parameters, return_identifier, body, env),
-            Statement::StructDefinition { .. } => todo!(),
+            Statement::StructDefinition { identifier, fields } => {
+                self.preprocess_struct_definition(identifier, fields, env)
+            }
             _ => Ok(()),
         }
     }
@@ -190,10 +192,9 @@ impl<'ctx> CodeGen<'ctx> {
                 else_branch,
                 env,
             )?,
-            Statement::StructDefinition {
-                identifier: _,
-                fields: _,
-            } => todo!(),
+            Statement::StructDefinition { identifier, fields } => {
+                self.compile_struct_definition(identifier, fields, env)?;
+            }
             Statement::WhileLoop { condition, block } => {
                 self.compile_while_loop(condition, block, env)?
             }

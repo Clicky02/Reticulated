@@ -248,6 +248,8 @@ impl<R: ReadTokens> Parser<R> {
             self.tokens.expect(TokenKind::Comma)?;
         }
 
+        self.tokens.expect(TokenKind::CloseBrace)?;
+
         Ok(Statement::StructDefinition { identifier, fields })
     }
 
