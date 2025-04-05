@@ -1,4 +1,7 @@
-use inkwell::{types::{FloatType, StructType}, values::BasicValue};
+use inkwell::{
+    types::{FloatType, StructType},
+    values::BasicValue,
+};
 
 use crate::{
     codegen::{
@@ -10,7 +13,7 @@ use crate::{
         err::GenError,
         CodeGen,
     },
-    parser::{BinaryOp, UnaryOp},
+    parser::{BinaryFnOp, UnaryFnOp},
 };
 
 use super::{llvm_resources::LLVMResources, primitive_unalloc, TO_STR_FN};
@@ -64,7 +67,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
-            BinaryOp::Add.fn_name(),
+            BinaryFnOp::Add.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
             FLOAT_ID,
             false,
@@ -96,7 +99,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
-            BinaryOp::Subtract.fn_name(),
+            BinaryFnOp::Subtract.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
             FLOAT_ID,
             false,
@@ -128,7 +131,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
-            BinaryOp::Multiply.fn_name(),
+            BinaryFnOp::Multiply.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
             FLOAT_ID,
             false,
@@ -159,7 +162,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
-            BinaryOp::Divide.fn_name(),
+            BinaryFnOp::Divide.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
             FLOAT_ID,
             false,
@@ -190,7 +193,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
-            BinaryOp::Greater.fn_name(),
+            BinaryFnOp::Greater.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
             BOOL_ID,
             false,
@@ -222,7 +225,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
-            BinaryOp::Less.fn_name(),
+            BinaryFnOp::Less.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
             BOOL_ID,
             false,
@@ -254,7 +257,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
-            BinaryOp::GreaterEqual.fn_name(),
+            BinaryFnOp::GreaterEqual.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
             BOOL_ID,
             false,
@@ -286,7 +289,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
-            BinaryOp::LessEqual.fn_name(),
+            BinaryFnOp::LessEqual.fn_name(),
             &[FLOAT_ID, FLOAT_ID],
             BOOL_ID,
             false,
@@ -318,7 +321,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(FLOAT_ID),
-            UnaryOp::Negate.fn_name(),
+            UnaryFnOp::Negate.fn_name(),
             &[FLOAT_ID],
             FLOAT_ID,
             false,

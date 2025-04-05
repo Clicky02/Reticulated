@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use inkwell::{values::PointerValue, AddressSpace};
 
-use crate::parser::{BinaryOp, Expression, Primary, UnaryOp};
+use crate::parser::{BinaryFnOp, BinaryOp, Expression, Primary, UnaryFnOp, UnaryOp};
 
 use super::{
     builtin::{TO_BOOL_FN, TO_FLOAT_FN, TO_INT_FN, TO_STR_FN},
@@ -20,15 +20,15 @@ impl<'ctx> CodeGen<'ctx> {
         expression: &Expression,
         env: &mut Environment<'ctx>,
     ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
-        let val = match expression {
-            Expression::Binary(left, op, right) => self.compile_binary(left, op, right, env)?,
-            Expression::Unary(op, expr) => self.compile_unary(op, expr, env)?,
-            Expression::Invoke(expr, params) => self.compile_invoke(expr, params, env)?,
-            Expression::Access(expr, id) => self.compile_access(expr, id, env)?,
-            Expression::Primary(primary) => self.compile_primary(primary, env)?,
-        };
-
-        Ok(val)
+        match expression {
+            Expression::Binary(left, op, right) => self.compile_binary(left, op, right, env),
+            Expression::BinaryFn(left, op, right) => self.compile_binary_fn(left, op, right, env),
+            Expression::Unary(op, expr) => self.compile_unary(op, expr, env),
+            Expression::UnaryFn(op, expr) => self.compile_unary_fn(op, expr, env),
+            Expression::Invoke(expr, params) => self.compile_invoke(expr, params, env),
+            Expression::Access(expr, id) => self.compile_access(expr, id, env),
+            Expression::Primary(primary) => self.compile_primary(primary, env),
+        }
     }
 
     pub(super) fn compile_access(
@@ -75,10 +75,62 @@ impl<'ctx> CodeGen<'ctx> {
         self.call_func(fn_id, &param_vals, env)
     }
 
+    // Currently, this only has short circuiting ops, everything else is implemented as a fn
     fn compile_binary(
         &mut self,
         left: &Box<Expression>,
         op: &BinaryOp,
+        right: &Box<Expression>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
+        let (left_ptr, left_tid) = self.compile_expression(left, env)?;
+
+        if left_tid != BOOL_ID {
+            return Err(GenError::InvalidType);
+        }
+
+        let left_type = left_tid.get_from(env).ink();
+        let left_bool = self
+            .extract_primitive(left_ptr, left_type)?
+            .into_int_value();
+
+        let cur_block = self.builder.get_insert_block().unwrap();
+        let cur_fn = cur_block.get_parent().unwrap();
+        let right_block = self.ctx.append_basic_block(cur_fn, "condition");
+        let continue_block = self.ctx.append_basic_block(cur_fn, "continue");
+
+        match op {
+            BinaryOp::And => {
+                self.builder
+                    .build_conditional_branch(left_bool, right_block, continue_block)?;
+            }
+            BinaryOp::Or => {
+                self.builder
+                    .build_conditional_branch(left_bool, continue_block, right_block)?;
+            }
+        };
+
+        self.builder.position_at_end(right_block);
+        self.free_pointer(left_ptr, left_tid, env)?;
+        let (right_ptr, right_tid) = self.compile_expression(right, env)?;
+        if right_tid != BOOL_ID {
+            return Err(GenError::InvalidType);
+        }
+        self.builder.build_unconditional_branch(continue_block)?;
+
+        self.builder.position_at_end(continue_block);
+        let ret = self
+            .builder
+            .build_phi(self.ptr_type(), &format!("{}_result", op.to_string()))?;
+        ret.add_incoming(&[(&left_ptr, cur_block), (&right_ptr, right_block)]);
+
+        Ok((ret.as_basic_value().into_pointer_value(), BOOL_ID))
+    }
+
+    fn compile_binary_fn(
+        &mut self,
+        left: &Box<Expression>,
+        op: &BinaryFnOp,
         right: &Box<Expression>,
         env: &mut Environment<'ctx>,
     ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
@@ -99,6 +151,35 @@ impl<'ctx> CodeGen<'ctx> {
     fn compile_unary(
         &mut self,
         op: &UnaryOp,
+        expr: &Box<Expression>,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
+        let (expr_ptr, expr_tid) = self.compile_expression(expr, env)?;
+
+        if expr_tid != BOOL_ID {
+            return Err(GenError::InvalidType);
+        }
+
+        let bool_type = BOOL_ID.get_from(env).ink();
+        let expr_bool = self
+            .extract_primitive(expr_ptr, bool_type)?
+            .into_int_value();
+        self.free_pointer(expr_ptr, expr_tid, env)?;
+
+        match op {
+            UnaryOp::Not => {
+                let ret = self
+                    .builder
+                    .build_not(expr_bool, &(op.to_string().to_owned() + "_result"))?;
+                let ret_struct_ptr = self.build_struct(bool_type, vec![ret.into()])?;
+                Ok((ret_struct_ptr, BOOL_ID))
+            }
+        }
+    }
+
+    fn compile_unary_fn(
+        &mut self,
+        op: &UnaryFnOp,
         expr: &Box<Expression>,
         env: &mut Environment<'ctx>,
     ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {

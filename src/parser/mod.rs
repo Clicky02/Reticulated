@@ -333,7 +333,7 @@ impl<R: ReadTokens> Parser<R> {
 
         while let Some(op) = self.match_equality_op() {
             let right = self.comparison()?;
-            expr = Expression::Binary(Box::new(expr), op, Box::new(right));
+            expr = Expression::BinaryFn(Box::new(expr), op, Box::new(right));
         }
 
         Ok(expr)
@@ -344,7 +344,7 @@ impl<R: ReadTokens> Parser<R> {
 
         while let Some(op) = self.match_comparison_op() {
             let right = self.term()?;
-            expr = Expression::Binary(Box::new(expr), op, Box::new(right));
+            expr = Expression::BinaryFn(Box::new(expr), op, Box::new(right));
         }
 
         Ok(expr)
@@ -355,7 +355,7 @@ impl<R: ReadTokens> Parser<R> {
 
         while let Some(op) = self.match_term_op() {
             let right = self.factor()?;
-            expr = Expression::Binary(Box::new(expr), op, Box::new(right));
+            expr = Expression::BinaryFn(Box::new(expr), op, Box::new(right));
         }
 
         Ok(expr)
@@ -366,7 +366,7 @@ impl<R: ReadTokens> Parser<R> {
 
         while let Some(op) = self.match_factor_op() {
             let right = self.unary()?;
-            expr = Expression::Binary(Box::new(expr), op, Box::new(right));
+            expr = Expression::BinaryFn(Box::new(expr), op, Box::new(right));
         }
 
         Ok(expr)
@@ -374,6 +374,11 @@ impl<R: ReadTokens> Parser<R> {
 
     fn unary(&mut self) -> Result<Expression> {
         // unary -> ( "!" | "-" ) unary | invoke
+
+        if let Some(op) = self.match_unary_fn_op() {
+            let right = self.unary()?;
+            return Ok(Expression::UnaryFn(op, Box::new(right)));
+        }
 
         if let Some(op) = self.match_unary_op() {
             let right = self.unary()?;
@@ -478,69 +483,79 @@ impl<R: ReadTokens> Parser<R> {
         }
     }
 
-    fn match_equality_op(&mut self) -> Option<BinaryOp> {
+    fn match_equality_op(&mut self) -> Option<BinaryFnOp> {
         match self.tokens.peek_next().kind {
             TokenKind::Operator(OperatorKind::NotEqual) => {
                 self.tokens.advance();
-                Some(BinaryOp::NotEqual)
+                Some(BinaryFnOp::NotEqual)
             }
             TokenKind::Operator(OperatorKind::Equal) => {
                 self.tokens.advance();
-                Some(BinaryOp::Equal)
+                Some(BinaryFnOp::Equal)
             }
             _ => None,
         }
     }
 
-    fn match_comparison_op(&mut self) -> Option<BinaryOp> {
+    fn match_comparison_op(&mut self) -> Option<BinaryFnOp> {
         match self.tokens.peek_next().kind {
             TokenKind::Operator(OperatorKind::GreaterThan) => {
                 self.tokens.advance();
-                Some(BinaryOp::Greater)
+                Some(BinaryFnOp::Greater)
             }
             TokenKind::Operator(OperatorKind::GreaterThanOrEqual) => {
                 self.tokens.advance();
-                Some(BinaryOp::GreaterEqual)
+                Some(BinaryFnOp::GreaterEqual)
             }
             TokenKind::Operator(OperatorKind::LessThan) => {
                 self.tokens.advance();
-                Some(BinaryOp::Less)
+                Some(BinaryFnOp::Less)
             }
             TokenKind::Operator(OperatorKind::LessThanOrEqual) => {
                 self.tokens.advance();
-                Some(BinaryOp::LessEqual)
+                Some(BinaryFnOp::LessEqual)
             }
             _ => None,
         }
     }
 
-    fn match_term_op(&mut self) -> Option<BinaryOp> {
+    fn match_term_op(&mut self) -> Option<BinaryFnOp> {
         match self.tokens.peek_next().kind {
             TokenKind::Operator(OperatorKind::Add) => {
                 self.tokens.advance();
-                Some(BinaryOp::Add)
+                Some(BinaryFnOp::Add)
             }
             TokenKind::Operator(OperatorKind::Subtract) => {
                 self.tokens.advance();
-                Some(BinaryOp::Subtract)
+                Some(BinaryFnOp::Subtract)
             }
             _ => None,
         }
     }
 
-    fn match_factor_op(&mut self) -> Option<BinaryOp> {
+    fn match_factor_op(&mut self) -> Option<BinaryFnOp> {
         match self.tokens.peek_next().kind {
             TokenKind::Operator(OperatorKind::Multiply) => {
                 self.tokens.advance();
-                Some(BinaryOp::Multiply)
+                Some(BinaryFnOp::Multiply)
             }
             TokenKind::Operator(OperatorKind::Divide) => {
                 self.tokens.advance();
-                Some(BinaryOp::Divide)
+                Some(BinaryFnOp::Divide)
             }
             TokenKind::Operator(OperatorKind::Modulo) => {
                 self.tokens.advance();
-                Some(BinaryOp::Modulo)
+                Some(BinaryFnOp::Modulo)
+            }
+            _ => None,
+        }
+    }
+
+    fn match_unary_fn_op(&mut self) -> Option<UnaryFnOp> {
+        match self.tokens.peek_next().kind {
+            TokenKind::Operator(OperatorKind::Subtract) => {
+                self.tokens.advance();
+                Some(UnaryFnOp::Negate)
             }
             _ => None,
         }
@@ -551,10 +566,6 @@ impl<R: ReadTokens> Parser<R> {
             TokenKind::Operator(OperatorKind::Not) => {
                 self.tokens.advance();
                 Some(UnaryOp::Not)
-            }
-            TokenKind::Operator(OperatorKind::Subtract) => {
-                self.tokens.advance();
-                Some(UnaryOp::Negate)
             }
             _ => None,
         }

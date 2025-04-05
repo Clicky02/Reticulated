@@ -1,13 +1,8 @@
-struct TestStruct {
-    test_int: int,
-    test_str: str,
-}
+a: bool = True
 
-test: TestStruct = TestStruct(1, "a")
-print(test.test_str)
-
-test.test_str = "hola"
-print(test.test_str)
-
-test = TestStruct(2, "b")
-print(test.test_str)
+print(str(a))
+print(str(not a))
+print(str(a and True))
+print(str(a and False))
+print(str(False or a))
+print(str(False or not a))

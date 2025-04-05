@@ -102,10 +102,10 @@ impl<'ctx> CodeGen<'ctx> {
     pub(super) fn free_pointer(
         &mut self,
         ptr: PointerValue<'ctx>,
-        ptr_type_id: TypeId,
+        tid: TypeId,
         env: &Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let fn_id = env.find_func(FREE_PTR_IDENT, Some(ptr_type_id), &[ptr_type_id])?;
+        let fn_id = env.find_func(FREE_PTR_IDENT, Some(tid), &[tid])?;
         self.call_func(fn_id, &[ptr], env)?;
         Ok(())
     }

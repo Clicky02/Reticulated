@@ -14,7 +14,7 @@ use crate::{
         err::GenError,
         CodeGen,
     },
-    parser::BinaryOp,
+    parser::BinaryFnOp,
 };
 
 use super::{llvm_resources::LLVMResources, TO_BOOL_FN, TO_FLOAT_FN, TO_INT_FN};
@@ -64,7 +64,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(STR_ID),
-            BinaryOp::Equal.fn_name(),
+            BinaryFnOp::Equal.fn_name(),
             &[STR_ID, STR_ID],
             BOOL_ID,
             false,
@@ -156,7 +156,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         let (fn_val, ..) = env.create_func(
             Some(STR_ID),
-            BinaryOp::Add.fn_name(),
+            BinaryFnOp::Add.fn_name(),
             &[STR_ID, STR_ID],
             STR_ID,
             false,
@@ -302,7 +302,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         self.build_unary_fn(fn_val, |gen, val| {
             let eq_fn =
-                env.find_func(BinaryOp::Equal.fn_name(), Some(STR_ID), &[STR_ID, STR_ID])?;
+                env.find_func(BinaryFnOp::Equal.fn_name(), Some(STR_ID), &[STR_ID, STR_ID])?;
             let true_str = gen.build_str_const("True", env)?;
             let (is_eq, ..) = gen.call_func(eq_fn, &[val, true_str], env)?;
             Ok(is_eq)
