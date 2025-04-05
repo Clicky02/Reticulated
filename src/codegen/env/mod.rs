@@ -106,8 +106,8 @@ impl<'ctx> Environment<'ctx> {
         self.func.scopes.last().unwrap().has_returned
     }
 
-    pub fn get_type(&self, id: TypeId) -> &TypeDef<'ctx> {
-        self.types.get(&id).unwrap()
+    pub fn get_type(&self, tid: TypeId) -> &TypeDef<'ctx> {
+        self.types.get(&tid).unwrap()
     }
 
     pub fn get_type_mut(&mut self, id: TypeId) -> &mut TypeDef<'ctx> {

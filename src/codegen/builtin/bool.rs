@@ -47,26 +47,31 @@ impl<'ctx> CodeGen<'ctx> {
         _res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) = env.create_func(Some(BOOL_ID), TO_STR_FN, &[BOOL_ID], STR_ID, false)?;
+        self.create_unary_fn(
+            TO_STR_FN,
+            BOOL_ID,
+            STR_ID,
+            true,
+            |gen, fn_val, param, env| {
+                let prim = gen.extract_primitive(param, bool_struct)?;
 
-        self.build_unary_fn(fn_val, |gen, param| {
-            let prim = gen.extract_primitive(param, bool_struct)?;
+                let true_branch = gen.ctx.append_basic_block(fn_val, "true_branch");
+                let false_branch = gen.ctx.append_basic_block(fn_val, "false_branch");
 
-            let true_branch = gen.ctx.append_basic_block(fn_val, "true_branch");
-            let false_branch = gen.ctx.append_basic_block(fn_val, "false_branch");
+                gen.builder.build_conditional_branch(
+                    prim.into_int_value(),
+                    true_branch,
+                    false_branch,
+                )?;
 
-            gen.builder.build_conditional_branch(
-                prim.into_int_value(),
-                true_branch,
-                false_branch,
-            )?;
+                gen.builder.position_at_end(true_branch);
+                let true_str = gen.build_str_const("True", env)?;
+                gen.builder.build_return(Some(&true_str))?;
 
-            gen.builder.position_at_end(true_branch);
-            let true_str = gen.build_str_const("True", env)?;
-            gen.builder.build_return(Some(&true_str))?;
-
-            gen.builder.position_at_end(false_branch);
-            gen.build_str_const("False", env)
-        })
+                gen.builder.position_at_end(false_branch);
+                gen.build_str_const("False", env)
+            },
+            env,
+        )
     }
 }

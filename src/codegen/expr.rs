@@ -142,12 +142,7 @@ impl<'ctx> CodeGen<'ctx> {
         let op_func_name = op.fn_name();
         let op_func_id = env.find_func(op_func_name, Some(left_tid), &[left_tid, right_tid])?;
 
-        let ret = self.call_func(op_func_id, &[left_ptr, right_ptr], env)?;
-
-        self.free_pointer(left_ptr, left_tid, env)?;
-        self.free_pointer(right_ptr, right_tid, env)?;
-
-        Ok(ret)
+        self.call_func(op_func_id, &[left_ptr, right_ptr], env)
     }
 
     fn compile_unary(
@@ -190,8 +185,6 @@ impl<'ctx> CodeGen<'ctx> {
         let op_func_id = env.find_func(op.fn_name(), Some(expr_tid), &[expr_tid])?;
 
         let ret = self.call_func(op_func_id, &[expr_ptr], env)?;
-
-        self.free_pointer(expr_ptr, expr_tid, env)?;
 
         Ok(ret)
     }

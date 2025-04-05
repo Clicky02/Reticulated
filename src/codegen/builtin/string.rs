@@ -62,91 +62,95 @@ impl<'ctx> CodeGen<'ctx> {
         str_struct_type: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) = env.create_func(
-            Some(STR_ID),
-            BinaryFnOp::Equal.fn_name(),
-            &[STR_ID, STR_ID],
-            BOOL_ID,
-            false,
-        )?;
-
         let int_type = self.len_type();
         let bool_struct_type = env.get_type(BOOL_ID).ink();
 
-        self.build_binary_fn(fn_val, |gen, left, right| {
-            let (left_str_ptr, left_str_len) = gen.build_extract_string(left, str_struct_type)?;
-            let (right_str_ptr, right_str_len) =
-                gen.build_extract_string(right, str_struct_type)?;
+        self.create_binary_fn(
+            BinaryFnOp::Equal.fn_name(),
+            STR_ID,
+            STR_ID,
+            STR_ID,
+            true,
+            |gen, left, right, _env| {
+                let (left_str_ptr, left_str_len) =
+                    gen.build_extract_string(left, str_struct_type)?;
+                let (right_str_ptr, right_str_len) =
+                    gen.build_extract_string(right, str_struct_type)?;
 
-            let entry_block = gen.builder.get_insert_block().unwrap();
-            let check_end_branch = gen.ctx.append_basic_block(fn_val, "check_end");
-            let compare_branch = gen.ctx.append_basic_block(fn_val, "compare_str");
-            let merge_branch = gen.ctx.append_basic_block(fn_val, "merge");
+                let entry_block = gen.builder.get_insert_block().unwrap();
+                let fn_val = entry_block.get_parent().unwrap();
 
-            gen.builder.position_at_end(merge_branch);
-            let result_val = gen.builder.build_phi(gen.ctx.bool_type(), "merge_val")?;
+                let check_end_branch = gen.ctx.append_basic_block(fn_val, "check_end");
+                let compare_branch = gen.ctx.append_basic_block(fn_val, "compare_str");
+                let merge_branch = gen.ctx.append_basic_block(fn_val, "merge");
 
-            // Ensure string length is equal, otherwise false
-            gen.builder.position_at_end(entry_block);
-            let eq_len = gen.builder.build_int_compare(
-                inkwell::IntPredicate::EQ,
-                left_str_len,
-                right_str_len,
-                "str_len_eq",
-            )?;
-            gen.builder
-                .build_conditional_branch(eq_len, check_end_branch, merge_branch)?;
-            result_val.add_incoming(&[(&gen.ctx.bool_type().const_int(0, false), entry_block)]); // Not equal if merge
+                gen.builder.position_at_end(merge_branch);
+                let result_val = gen.builder.build_phi(gen.ctx.bool_type(), "merge_val")?;
 
-            // Check to see if were at end, if we are true
-            gen.builder.position_at_end(check_end_branch);
-
-            let index_phi = gen.builder.build_phi(int_type, "index")?;
-            index_phi.add_incoming(&[(&int_type.const_int(0, false), entry_block)]);
-
-            let index = index_phi.as_basic_value().into_int_value();
-
-            let at_end = gen.builder.build_int_compare(
-                inkwell::IntPredicate::EQ,
-                index,
-                left_str_len,
-                "at_end",
-            )?;
-
-            gen.builder
-                .build_conditional_branch(at_end, merge_branch, compare_branch)?;
-            result_val
-                .add_incoming(&[(&gen.ctx.bool_type().const_int(1, false), check_end_branch)]); // Equal if merge
-
-            // Check if next characters are equal, otherwise false
-            gen.builder.position_at_end(compare_branch);
-
-            let (left_char, right_char) = unsafe {
-                (
-                    gen.build_extract_char(left_str_ptr, index)?,
-                    gen.build_extract_char(right_str_ptr, index)?,
-                )
-            };
-
-            let char_eq = gen.builder.build_int_compare(
-                inkwell::IntPredicate::EQ,
-                left_char,
-                right_char,
-                "char_eq",
-            )?;
-
-            let next_index =
+                // Ensure string length is equal, otherwise false
+                gen.builder.position_at_end(entry_block);
+                let eq_len = gen.builder.build_int_compare(
+                    inkwell::IntPredicate::EQ,
+                    left_str_len,
+                    right_str_len,
+                    "str_len_eq",
+                )?;
                 gen.builder
-                    .build_int_add(index, int_type.const_int(1, false), "next_index")?;
-            index_phi.add_incoming(&[(&next_index, compare_branch)]);
+                    .build_conditional_branch(eq_len, check_end_branch, merge_branch)?;
+                result_val.add_incoming(&[(&gen.ctx.bool_type().const_int(0, false), entry_block)]); // Not equal if merge
 
-            gen.builder
-                .build_conditional_branch(char_eq, check_end_branch, merge_branch)?;
-            result_val.add_incoming(&[(&gen.ctx.bool_type().const_int(0, false), compare_branch)]); // Not equal if merge
+                // Check to see if were at end, if we are true
+                gen.builder.position_at_end(check_end_branch);
 
-            gen.builder.position_at_end(merge_branch);
-            gen.build_struct(bool_struct_type, vec![result_val.as_basic_value()])
-        })
+                let index_phi = gen.builder.build_phi(int_type, "index")?;
+                index_phi.add_incoming(&[(&int_type.const_int(0, false), entry_block)]);
+
+                let index = index_phi.as_basic_value().into_int_value();
+
+                let at_end = gen.builder.build_int_compare(
+                    inkwell::IntPredicate::EQ,
+                    index,
+                    left_str_len,
+                    "at_end",
+                )?;
+
+                gen.builder
+                    .build_conditional_branch(at_end, merge_branch, compare_branch)?;
+                result_val
+                    .add_incoming(&[(&gen.ctx.bool_type().const_int(1, false), check_end_branch)]); // Equal if merge
+
+                // Check if next characters are equal, otherwise false
+                gen.builder.position_at_end(compare_branch);
+
+                let (left_char, right_char) = unsafe {
+                    (
+                        gen.build_extract_char(left_str_ptr, index)?,
+                        gen.build_extract_char(right_str_ptr, index)?,
+                    )
+                };
+
+                let char_eq = gen.builder.build_int_compare(
+                    inkwell::IntPredicate::EQ,
+                    left_char,
+                    right_char,
+                    "char_eq",
+                )?;
+
+                let next_index =
+                    gen.builder
+                        .build_int_add(index, int_type.const_int(1, false), "next_index")?;
+                index_phi.add_incoming(&[(&next_index, compare_branch)]);
+
+                gen.builder
+                    .build_conditional_branch(char_eq, check_end_branch, merge_branch)?;
+                result_val
+                    .add_incoming(&[(&gen.ctx.bool_type().const_int(0, false), compare_branch)]); // Not equal if merge
+
+                gen.builder.position_at_end(merge_branch);
+                gen.build_struct(bool_struct_type, vec![result_val.as_basic_value()])
+            },
+            env,
+        )
     }
 
     fn setup_str_add_str(
@@ -154,56 +158,55 @@ impl<'ctx> CodeGen<'ctx> {
         str_struct_type: StructType<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) = env.create_func(
-            Some(STR_ID),
+        self.create_binary_fn(
             BinaryFnOp::Add.fn_name(),
-            &[STR_ID, STR_ID],
             STR_ID,
-            false,
-        )?;
+            STR_ID,
+            STR_ID,
+            true,
+            |gen, left, right, env| {
+                let (left_str_ptr, left_str_len) =
+                    gen.build_extract_string(left, str_struct_type)?;
+                let (right_str_ptr, right_str_len) =
+                    gen.build_extract_string(right, str_struct_type)?;
 
-        let char_type = self.char_type();
+                let str_data_size =
+                    gen.builder
+                        .build_int_add(left_str_len, right_str_len, "new_str_data_size")?;
 
-        self.build_binary_fn(fn_val, |gen, left, right| {
-            let (left_str_ptr, left_str_len) = gen.build_extract_string(left, str_struct_type)?;
-            let (right_str_ptr, right_str_len) =
-                gen.build_extract_string(right, str_struct_type)?;
+                let str_data_ptr = gen.build_str_data_malloc(str_data_size, "new_str_data_ptr")?;
 
-            let str_data_size =
-                gen.builder
-                    .build_int_add(left_str_len, right_str_len, "new_str_data_size")?;
-
-            let str_data_ptr = gen.build_str_data_malloc(str_data_size, "new_str_data_ptr")?;
-
-            // Copy left into string data
-            // TODO: figure out if there's a better way to determine alignment
-            gen.builder.build_memcpy(
-                str_data_ptr,
-                1, // dest_align_bytes
-                left_str_ptr,
-                1, // src_align_bytes
-                left_str_len,
-            )?;
-
-            // Copy right into string data
-            let str_data_ptr_to_right = unsafe {
-                gen.builder.build_gep(
-                    char_type,
+                // Copy left into string data
+                // TODO: figure out if there's a better way to determine alignment
+                gen.builder.build_memcpy(
                     str_data_ptr,
-                    &[left_str_len],
-                    "str_data_ptr_to_right",
-                )?
-            };
-            gen.builder.build_memcpy(
-                str_data_ptr_to_right,
-                1, // dest_align_bytes
-                right_str_ptr,
-                1, // src_align_bytes
-                right_str_len,
-            )?;
+                    1, // dest_align_bytes
+                    left_str_ptr,
+                    1, // src_align_bytes
+                    left_str_len,
+                )?;
 
-            gen.build_str_struct(str_data_ptr, str_data_size, env)
-        })
+                // Copy right into string data
+                let str_data_ptr_to_right = unsafe {
+                    gen.builder.build_gep(
+                        gen.char_type(),
+                        str_data_ptr,
+                        &[left_str_len],
+                        "str_data_ptr_to_right",
+                    )?
+                };
+                gen.builder.build_memcpy(
+                    str_data_ptr_to_right,
+                    1, // dest_align_bytes
+                    right_str_ptr,
+                    1, // src_align_bytes
+                    right_str_len,
+                )?;
+
+                gen.build_str_struct(str_data_ptr, str_data_size, env)
+            },
+            env,
+        )
     }
 
     fn setup_str_to_int(
@@ -212,40 +215,45 @@ impl<'ctx> CodeGen<'ctx> {
         res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) = env.create_func(Some(STR_ID), TO_INT_FN, &[STR_ID], INT_ID, false)?;
-
         let int_struct = INT_ID.get_from(env).ink();
         let int_type = self.prim_int_type();
 
-        self.build_unary_fn(fn_val, |gen, val| {
-            let (str_ptr, str_len) = gen.build_extract_string(val, str_struct)?;
+        self.create_unary_fn(
+            TO_INT_FN,
+            STR_ID,
+            INT_ID,
+            true,
+            |gen, _fn_val, val, _env| {
+                let (str_ptr, str_len) = gen.build_extract_string(val, str_struct)?;
 
-            let format_spec = gen
-                .builder
-                .build_global_string_ptr("%ld", "str_to_int_format_specifier")?
-                .as_pointer_value();
+                let format_spec = gen
+                    .builder
+                    .build_global_string_ptr("%ld", "str_to_int_format_specifier")?
+                    .as_pointer_value();
 
-            let int_struct_ptr =
-                gen.build_struct(int_struct, vec![int_type.const_int(0, false).into()])?;
-            let int_data_ptr =
-                gen.builder
-                    .build_struct_gep(int_struct, int_struct_ptr, 0, "int_data")?;
+                let int_struct_ptr =
+                    gen.build_struct(int_struct, vec![int_type.const_int(0, false).into()])?;
+                let int_data_ptr =
+                    gen.builder
+                        .build_struct_gep(int_struct, int_struct_ptr, 0, "int_data")?;
 
-            // call sscanf
-            // TODO: Throw exception if does not match
-            gen.builder.build_call(
-                res.sscanf,
-                &[
-                    str_ptr.into(),
-                    format_spec.into(),
-                    int_data_ptr.into(),
-                    str_len.into(),
-                ],
-                "_",
-            )?;
+                // call sscanf
+                // TODO: Throw exception if does not match
+                gen.builder.build_call(
+                    res.sscanf,
+                    &[
+                        str_ptr.into(),
+                        format_spec.into(),
+                        int_data_ptr.into(),
+                        str_len.into(),
+                    ],
+                    "_",
+                )?;
 
-            Ok(int_struct_ptr)
-        })
+                Ok(int_struct_ptr)
+            },
+            env,
+        )
     }
 
     fn setup_str_to_float(
@@ -254,42 +262,49 @@ impl<'ctx> CodeGen<'ctx> {
         res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) =
-            env.create_func(Some(STR_ID), TO_FLOAT_FN, &[STR_ID], FLOAT_ID, false)?;
-
         let float_struct = FLOAT_ID.get_from(env).ink();
         let float_type = self.prim_float_type();
 
-        self.build_unary_fn(fn_val, |gen, val| {
-            let (str_ptr, str_len) = gen.build_extract_string(val, str_struct)?;
+        self.create_unary_fn(
+            TO_FLOAT_FN,
+            STR_ID,
+            FLOAT_ID,
+            true,
+            |gen, _fn_val, val, _env| {
+                let (str_ptr, str_len) = gen.build_extract_string(val, str_struct)?;
 
-            // TODO: Make a shared global constant for format specifiers
-            let format_spec = gen
-                .builder
-                .build_global_string_ptr("%lf", "str_to_float_format_specifier")?
-                .as_pointer_value();
+                // TODO: Make a shared global constant for format specifiers
+                let format_spec = gen
+                    .builder
+                    .build_global_string_ptr("%lf", "str_to_float_format_specifier")?
+                    .as_pointer_value();
 
-            let float_struct_ptr =
-                gen.build_struct(float_struct, vec![float_type.const_float(0.0).into()])?;
-            let float_data_ptr =
-                gen.builder
-                    .build_struct_gep(float_struct, float_struct_ptr, 0, "float_data")?;
+                let float_struct_ptr =
+                    gen.build_struct(float_struct, vec![float_type.const_float(0.0).into()])?;
+                let float_data_ptr = gen.builder.build_struct_gep(
+                    float_struct,
+                    float_struct_ptr,
+                    0,
+                    "float_data",
+                )?;
 
-            // call sscanf
-            // TODO: Throw exception if does not match
-            gen.builder.build_call(
-                res.sscanf,
-                &[
-                    str_ptr.into(),
-                    format_spec.into(),
-                    float_data_ptr.into(),
-                    str_len.into(),
-                ],
-                "_",
-            )?;
+                // call sscanf
+                // TODO: Throw exception if does not match
+                gen.builder.build_call(
+                    res.sscanf,
+                    &[
+                        str_ptr.into(),
+                        format_spec.into(),
+                        float_data_ptr.into(),
+                        str_len.into(),
+                    ],
+                    "_",
+                )?;
 
-            Ok(float_struct_ptr)
-        })
+                Ok(float_struct_ptr)
+            },
+            env,
+        )
     }
 
     fn setup_str_to_bool(
@@ -298,15 +313,20 @@ impl<'ctx> CodeGen<'ctx> {
         _res: &LLVMResources<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) = env.create_func(Some(STR_ID), TO_BOOL_FN, &[STR_ID], BOOL_ID, false)?;
-
-        self.build_unary_fn(fn_val, |gen, val| {
-            let eq_fn =
-                env.find_func(BinaryFnOp::Equal.fn_name(), Some(STR_ID), &[STR_ID, STR_ID])?;
-            let true_str = gen.build_str_const("True", env)?;
-            let (is_eq, ..) = gen.call_func(eq_fn, &[val, true_str], env)?;
-            Ok(is_eq)
-        })
+        self.create_unary_fn(
+            TO_BOOL_FN,
+            STR_ID,
+            BOOL_ID,
+            true,
+            |gen, _fn_val, val, env| {
+                let eq_fn =
+                    env.find_func(BinaryFnOp::Equal.fn_name(), Some(STR_ID), &[STR_ID, STR_ID])?;
+                let true_str = gen.build_str_const("True", env)?;
+                let (is_eq, ..) = gen.call_func(eq_fn, &[val, true_str], env)?;
+                Ok(is_eq)
+            },
+            env,
+        )
     }
 
     pub(super) fn build_extract_string(
