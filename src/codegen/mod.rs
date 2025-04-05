@@ -12,7 +12,7 @@ pub mod ink_extension;
 pub mod structs;
 pub mod util;
 
-use crate::parser::{Primary, Statement};
+use crate::parser::{LValue, Primary, Statement};
 
 // TODO: Not pub
 pub struct CodeGen<'ctx> {
@@ -135,18 +135,21 @@ impl<'ctx> CodeGen<'ctx> {
 
                 assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
 
-                // TODO: Do variables need to be reference counted?
                 let ptr_type = self.ctx.ptr_type(AddressSpace::default());
                 let var_ptr = self.builder.build_alloca(ptr_type, identifier)?;
                 self.builder.build_store(var_ptr, expr_ptr)?; // Store the expression pointer in the variable.
 
                 env.insert_var(identifier.clone(), var_ptr, expr_type_id);
             }
-            Statement::Assignment {
-                identifier,
-                expression,
-            } => {
-                let (var_ptr, var_type_id) = env.get_var(identifier)?;
+            Statement::Assignment { lvalue, expression } => {
+                let (var_ptr, var_type_id) = match lvalue {
+                    LValue::Ident(id) => env.get_var(id)?,
+                    LValue::Access(expr, ident) => {
+                        let (expr_ptr, expr_tid) = self.compile_expression(expr, env)?;
+                        self.build_gep_field(expr_ptr, expr_tid, ident, env)?
+                    }
+                };
+
                 let (expr_ptr, expr_type_id) = self.compile_expression(expression, env)?;
 
                 let old_expr_ptr = self.builder.build_load(

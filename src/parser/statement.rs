@@ -1,6 +1,12 @@
 use super::Expression;
 
 #[derive(Debug)]
+pub enum LValue {
+    Ident(String),
+    Access(Box<Expression>, String),
+}
+
+#[derive(Debug)]
 pub enum Statement {
     Declaration {
         identifier: String,
@@ -8,7 +14,7 @@ pub enum Statement {
         expression: Expression,
     },
     Assignment {
-        identifier: String,
+        lvalue: LValue,
         expression: Expression,
     },
     FunctionDeclaration {

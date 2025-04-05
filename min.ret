@@ -5,3 +5,9 @@ struct TestStruct {
 
 test: TestStruct = TestStruct(1, "a")
 print(test.test_str)
+
+test.test_str = "hola"
+print(test.test_str)
+
+test = TestStruct(2, "b")
+print(test.test_str)

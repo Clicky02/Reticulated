@@ -31,30 +31,21 @@ impl<'ctx> CodeGen<'ctx> {
         Ok(val)
     }
 
-    fn compile_access(
+    pub(super) fn compile_access(
         &mut self,
         expr: &Box<Expression>,
         ident: &String,
         env: &mut Environment<'ctx>,
     ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
-        let (expr_ptr, expr_type) = self.compile_expression(expr, env)?;
-        let type_def = env.get_type(expr_type);
-        let struct_type = type_def.ink();
-
-        let field = type_def.find_field(&ident)?;
-        let field_ptr = self.builder.build_struct_gep(
-            struct_type,
-            expr_ptr,
-            field.index(),
-            &(ident.to_owned() + "_field"),
-        )?;
+        let (expr_ptr, expr_tid) = self.compile_expression(expr, env)?;
+        let (field_ptr, field_tid) = self.build_gep_field(expr_ptr, expr_tid, ident, env)?;
 
         let field_val = self
             .builder
             .build_load(self.ctx.ptr_type(AddressSpace::default()), field_ptr, "_")?
             .into_pointer_value();
 
-        Ok((field_val, field.type_id()))
+        Ok((field_val, field_tid))
     }
 
     fn compile_invoke(
@@ -167,5 +158,26 @@ impl<'ctx> CodeGen<'ctx> {
             Primary::None => todo!(),
             Primary::Grouping(expr) => self.compile_expression(expr, env),
         }
+    }
+
+    pub(super) fn build_gep_field(
+        &mut self,
+        struct_ptr: PointerValue<'ctx>,
+        struct_tid: TypeId,
+        field_id: &String,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
+        let type_def = env.get_type(struct_tid);
+        let struct_type = type_def.ink();
+
+        let field = type_def.find_field(&field_id)?;
+        let field_ptr = self.builder.build_struct_gep(
+            struct_type,
+            struct_ptr,
+            field.index(),
+            &(field_id.to_owned() + "_field"),
+        )?;
+
+        Ok((field_ptr, field.type_id()))
     }
 }

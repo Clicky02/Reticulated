@@ -54,7 +54,7 @@ impl<R: ReadTokens> Parser<R> {
             TokenKind::Identifier(_) => match self.tokens.peek(1).kind {
                 TokenKind::Colon => self.declaration()?,
                 TokenKind::Operator(OperatorKind::Assign) => self.assignment()?,
-                _ => Statement::Expression(self.expression()?),
+                _ => self.expr_statement()?,
             },
             TokenKind::Keyword(KeywordKind::Def) => self.fn_declaration()?,
             TokenKind::Keyword(KeywordKind::Extern) => self.extern_fn_declaration()?,
@@ -62,12 +62,39 @@ impl<R: ReadTokens> Parser<R> {
             TokenKind::Keyword(KeywordKind::Return) => self.return_statement()?,
             TokenKind::Keyword(KeywordKind::Struct) => self.struct_definition()?,
             TokenKind::Keyword(KeywordKind::While) => self.while_loop()?,
-            _ => Statement::Expression(self.expression()?),
+            _ => self.expr_statement()?,
         };
 
         // TODO: Newline?
 
         Ok(statement)
+    }
+
+    fn expr_statement(&mut self) -> Result<Statement> {
+        // expr_statement -> expression
+        // assignment -> access "=" expression
+
+        let expr = self.expression()?;
+
+        if self.tokens.check(TokenKind::Operator(OperatorKind::Assign)) {
+            let op = self.tokens.advance().unwrap();
+
+            if let Expression::Access(expr, ident) = expr {
+                let rvalue = self.expression()?;
+                Ok(Statement::Assignment {
+                    lvalue: LValue::Access(expr, ident),
+                    expression: rvalue,
+                })
+            } else {
+                Err(anyhow!(
+                    "Expected identifier or access at {}, found expression ({:?}) instead.",
+                    op.span,
+                    expr
+                ))
+            }
+        } else {
+            Ok(Statement::Expression(expr))
+        }
     }
 
     fn declaration(&mut self) -> Result<Statement> {
@@ -98,7 +125,7 @@ impl<R: ReadTokens> Parser<R> {
         let expression = self.expression()?;
 
         Ok(Statement::Assignment {
-            identifier,
+            lvalue: LValue::Ident(identifier),
             expression,
         })
     }
