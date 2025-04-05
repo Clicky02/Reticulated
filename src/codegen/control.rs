@@ -16,13 +16,13 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         // TODO: Decrement Condition Expressions
 
-        let (cond_ptr, cond_type_id) = self.compile_expression(condition, env)?;
-        let cond_type = env.get_type(cond_type_id);
+        let (cond_ptr, cond_tid) = self.compile_expression(condition, env)?;
+        let cond_type = env.get_type(cond_tid);
 
-        assert_eq!(cond_type_id, BOOL_ID); // TODO: GenError
+        assert_eq!(cond_tid, BOOL_ID); // TODO: GenError
 
         let mut cond_val = self.extract_primitive(cond_ptr, cond_type.ink())?;
-        self.free_pointer(cond_ptr, cond_type_id, env)?;
+        self.free_pointer(cond_ptr, cond_tid, env)?;
 
         let mut source_block = self.builder.get_insert_block().unwrap();
         let func = source_block.get_parent().unwrap();
@@ -55,12 +55,12 @@ impl<'ctx> CodeGen<'ctx> {
 
             // Compile condition
             self.builder.position_at_end(next_source_block);
-            let (cond_ptr, cond_type_id) = self.compile_expression(condition, env)?;
-            let cond_type = env.get_type(cond_type_id);
+            let (cond_ptr, cond_tid) = self.compile_expression(condition, env)?;
+            let cond_type = env.get_type(cond_tid);
             // TODO: Check boolean?
 
             cond_val = self.extract_primitive(cond_ptr, cond_type.ink())?;
-            self.free_pointer(cond_ptr, cond_type_id, env)?;
+            self.free_pointer(cond_ptr, cond_tid, env)?;
 
             source_block = next_source_block;
             then_block = next_then_block;
@@ -118,14 +118,14 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.build_unconditional_branch(condition_block)?;
         self.builder.position_at_end(condition_block);
 
-        let (expr_ptr, type_id) = self.compile_expression(condition, env)?;
-        assert_eq!(type_id, BOOL_ID); // TODO Error
+        let (expr_ptr, tid) = self.compile_expression(condition, env)?;
+        assert_eq!(tid, BOOL_ID); // TODO Error
 
-        let expr_type = env.get_type(type_id);
+        let expr_type = env.get_type(tid);
         let bool_val = self
             .extract_primitive(expr_ptr, expr_type.ink())?
             .into_int_value();
-        self.free_pointer(expr_ptr, type_id, env)?;
+        self.free_pointer(expr_ptr, tid, env)?;
 
         self.builder
             .build_conditional_branch(bool_val, body_block, merge_block)?;

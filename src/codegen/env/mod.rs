@@ -136,9 +136,9 @@ impl<'ctx> Environment<'ctx> {
         &self,
         ident: &str,
         owner: Option<TypeId>,
-        param_types: &[TypeId],
+        param_tids: &[TypeId],
     ) -> Result<FunctionId, GenError> {
-        let fn_name = self.create_fn_name(ident, owner, param_types);
+        let fn_name = self.create_fn_name(ident, owner, param_tids);
 
         self.fn_ids
             .get(&fn_name)

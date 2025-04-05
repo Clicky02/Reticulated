@@ -14,8 +14,8 @@ use super::id::TypeId;
 pub struct Field(u32, String, TypeId); // index, ident, type
 
 impl Field {
-    pub fn new(index: u32, ident: impl ToString, type_id: TypeId) -> Self {
-        Self(index, ident.to_string(), type_id)
+    pub fn new(index: u32, ident: impl ToString, tid: TypeId) -> Self {
+        Self(index, ident.to_string(), tid)
     }
 
     pub fn index(&self) -> u32 {
@@ -26,7 +26,7 @@ impl Field {
         &self.1
     }
 
-    pub fn type_id(&self) -> TypeId {
+    pub fn tid(&self) -> TypeId {
         self.2
     }
 }

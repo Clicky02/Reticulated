@@ -37,8 +37,8 @@ impl<'ctx> CodeGen<'ctx> {
 
         let struct_type = self.create_struct_type(ident, field_ptr_types);
 
-        let type_id = env.gen_type_id();
-        env.register_type(ident, type_id, TypeDef::new(ident, struct_type, fields))?;
+        let tid = env.gen_type_id();
+        env.register_type(ident, tid, TypeDef::new(ident, struct_type, fields))?;
 
         Ok(())
     }
@@ -49,15 +49,15 @@ impl<'ctx> CodeGen<'ctx> {
         _fields: &[(String, String)],
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let type_id = env.find_type(ident)?;
+        let tid = env.find_type(ident)?;
         let prev_block = self.builder.get_insert_block().unwrap();
 
         // Pointer Functions
-        self.build_free_ptr_fn(type_id, Self::struct_unalloc, env)?;
-        self.build_copy_ptr_fn(type_id, env)?;
+        self.build_free_ptr_fn(tid, Self::struct_unalloc, env)?;
+        self.build_copy_ptr_fn(tid, env)?;
 
         // Constructor
-        self.build_struct_constructor(ident, type_id, env)?;
+        self.build_struct_constructor(ident, tid, env)?;
 
         self.builder.position_at_end(prev_block);
         Ok(())
@@ -121,17 +121,17 @@ impl<'ctx> CodeGen<'ctx> {
 
     fn struct_unalloc(
         ptr: PointerValue<'ctx>,
-        type_id: TypeId,
+        tid: TypeId,
         gen: &mut CodeGen<'ctx>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let type_def = type_id.get_from(env);
+        let type_def = tid.get_from(env);
         let ink_type = type_def.ink();
         let fields = type_def.fields();
 
         for i in 0..fields.len() {
             let field = &fields[i];
-            let field_type = field.type_id();
+            let field_type = field.tid();
             let free_id: super::env::id::FunctionId =
                 env.find_func(FREE_PTR_IDENT, Some(field_type), &[field_type])?;
             let field_ptr_ptr =
@@ -150,18 +150,14 @@ impl<'ctx> CodeGen<'ctx> {
     fn build_struct_constructor(
         &mut self,
         ident: &str,
-        type_id: TypeId,
+        tid: TypeId,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let type_def = type_id.get_from(env);
-        let fields: Vec<TypeId> = type_def
-            .fields()
-            .iter()
-            .map(|field| field.type_id())
-            .collect();
+        let type_def = tid.get_from(env);
+        let fields: Vec<TypeId> = type_def.fields().iter().map(|field| field.tid()).collect();
         let struct_type = type_def.ink();
 
-        let (fn_val, ..) = env.create_func(None, ident, &fields, type_id, false)?;
+        let (fn_val, ..) = env.create_func(None, ident, &fields, tid, false)?;
         let entry_block = self.ctx.append_basic_block(fn_val, "entry");
         self.builder.position_at_end(entry_block);
 

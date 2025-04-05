@@ -78,10 +78,10 @@ impl<'ctx> CodeGen<'ctx> {
         expr: &Expression,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (expr_ptr, expr_type_id) = self.compile_expression(expr, env)?;
+        let (expr_ptr, expr_tid) = self.compile_expression(expr, env)?;
         let fn_def = env.get_cur_fn();
 
-        if fn_def.ret_type != expr_type_id {
+        if fn_def.ret_type != expr_tid {
             return Err(GenError::InvalidType);
         }
 

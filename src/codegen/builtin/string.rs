@@ -413,11 +413,11 @@ impl<'ctx> CodeGen<'ctx> {
 
 fn str_unalloc(
     ptr: PointerValue<'_>,
-    type_id: TypeId,
+    tid: TypeId,
     gen: &mut CodeGen<'_>,
     env: &mut Environment<'_>,
 ) -> Result<(), GenError> {
-    let ink_type = type_id.get_from(env).ink();
+    let ink_type = tid.get_from(env).ink();
     let ptr_ptr_str = gen
         .builder
         .build_struct_gep(ink_type, ptr, 0, "ptr_ptr_str_data")?;

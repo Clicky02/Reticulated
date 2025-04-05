@@ -39,27 +39,26 @@ impl<'ctx> CodeGen<'ctx> {
     pub(super) fn copy_pointer(
         &mut self,
         ptr: PointerValue<'ctx>,
-        ptr_type_id: TypeId,
+        ptr_tid: TypeId,
         env: &mut Environment<'ctx>,
     ) -> Result<PointerValue<'ctx>, GenError> {
-        let fn_id = env.find_func(COPY_PTR_IDENT, Some(ptr_type_id), &[ptr_type_id])?;
+        let fn_id = env.find_func(COPY_PTR_IDENT, Some(ptr_tid), &[ptr_tid])?;
         let (ret, ..) = self.call_func(fn_id, &[ptr], env)?;
         Ok(ret)
     }
 
     pub(super) fn build_copy_ptr_fn(
         &mut self,
-        type_id: TypeId,
+        tid: TypeId,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) =
-            env.create_func(Some(type_id), COPY_PTR_IDENT, &[type_id], type_id, false)?;
+        let (fn_val, ..) = env.create_func(Some(tid), COPY_PTR_IDENT, &[tid], tid, false)?;
         let entry = self.ctx.append_basic_block(fn_val, "entry");
         self.builder.position_at_end(entry);
 
         let ptr = fn_val.get_nth_param(0).unwrap().into_pointer_value();
 
-        let type_def = type_id.get_from(env);
+        let type_def = tid.get_from(env);
         let idx = type_def.ink().count_fields() - 1;
         let ref_count_ptr =
             self.builder
@@ -84,11 +83,10 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub(super) fn build_noop_copy_ptr_fn(
         &mut self,
-        type_id: TypeId,
+        tid: TypeId,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) =
-            env.create_func(Some(type_id), COPY_PTR_IDENT, &[type_id], type_id, false)?;
+        let (fn_val, ..) = env.create_func(Some(tid), COPY_PTR_IDENT, &[tid], tid, false)?;
         let entry = self.ctx.append_basic_block(fn_val, "entry");
         self.builder.position_at_end(entry);
 
@@ -112,7 +110,7 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub(super) fn build_free_ptr_fn(
         &mut self,
-        type_id: TypeId,
+        tid: TypeId,
         custom_unalloc: impl FnOnce(
             PointerValue<'ctx>,
             TypeId,
@@ -121,14 +119,13 @@ impl<'ctx> CodeGen<'ctx> {
         ) -> Result<(), GenError>,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) =
-            env.create_func(Some(type_id), FREE_PTR_IDENT, &[type_id], NONE_ID, false)?; // TODO: Optional return
+        let (fn_val, ..) = env.create_func(Some(tid), FREE_PTR_IDENT, &[tid], NONE_ID, false)?; // TODO: Optional return
         let entry = self.ctx.append_basic_block(fn_val, "entry");
         self.builder.position_at_end(entry);
 
         let ptr = fn_val.get_nth_param(0).unwrap().into_pointer_value();
 
-        let type_def = type_id.get_from(env);
+        let type_def = tid.get_from(env);
         let idx = type_def.ink().count_fields() - 1;
         let ref_count_ptr =
             self.builder
@@ -162,7 +159,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         self.builder.position_at_end(unalloc_block);
 
-        custom_unalloc(ptr, type_id, self, env)?;
+        custom_unalloc(ptr, tid, self, env)?;
         self.builder.build_free(ptr)?; // DO NOT USE MEMORY AFTER FREE
 
         self.builder.build_unconditional_branch(merge_block)?;
@@ -177,11 +174,10 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub(super) fn build_noop_free_ptr_fn(
         &mut self,
-        type_id: TypeId,
+        tid: TypeId,
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let (fn_val, ..) =
-            env.create_func(Some(type_id), FREE_PTR_IDENT, &[type_id], NONE_ID, false)?; // TODO: Optional return
+        let (fn_val, ..) = env.create_func(Some(tid), FREE_PTR_IDENT, &[tid], NONE_ID, false)?; // TODO: Optional return
         let entry = self.ctx.append_basic_block(fn_val, "entry");
         self.builder.position_at_end(entry);
 
@@ -196,12 +192,12 @@ impl<'ctx> CodeGen<'ctx> {
         scope: &Scope<'ctx>,
         env: &Environment<'ctx>,
     ) -> Result<(), GenError> {
-        for (var, var_type_id) in scope.variables().values() {
+        for (var, tid) in scope.variables().values() {
             let var_val = self
                 .builder
                 .build_load(self.ptr_type(), *var, "loaded_var")?
                 .into_pointer_value();
-            self.free_pointer(var_val, *var_type_id, env)?;
+            self.free_pointer(var_val, *tid, env)?;
         }
         Ok(())
     }

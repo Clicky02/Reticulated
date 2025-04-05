@@ -130,19 +130,19 @@ impl<'ctx> CodeGen<'ctx> {
                 type_identifier,
                 expression,
             } => {
-                let var_type_id = env.find_type(type_identifier)?;
-                let (expr_ptr, expr_type_id) = self.compile_expression(expression, env)?;
+                let var_tid = env.find_type(type_identifier)?;
+                let (expr_ptr, expr_tid) = self.compile_expression(expression, env)?;
 
-                assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
+                assert_eq!(var_tid, expr_tid); // TODO: Gen Error
 
                 let ptr_type = self.ctx.ptr_type(AddressSpace::default());
                 let var_ptr = self.builder.build_alloca(ptr_type, identifier)?;
                 self.builder.build_store(var_ptr, expr_ptr)?; // Store the expression pointer in the variable.
 
-                env.insert_var(identifier.clone(), var_ptr, expr_type_id);
+                env.insert_var(identifier.clone(), var_ptr, expr_tid);
             }
             Statement::Assignment { lvalue, expression } => {
-                let (var_ptr, var_type_id) = match lvalue {
+                let (var_ptr, var_tid) = match lvalue {
                     LValue::Ident(id) => env.get_var(id)?,
                     LValue::Access(expr, ident) => {
                         let (expr_ptr, expr_tid) = self.compile_expression(expr, env)?;
@@ -150,16 +150,16 @@ impl<'ctx> CodeGen<'ctx> {
                     }
                 };
 
-                let (expr_ptr, expr_type_id) = self.compile_expression(expression, env)?;
+                let (expr_ptr, expr_tid) = self.compile_expression(expression, env)?;
 
                 let old_expr_ptr = self.builder.build_load(
                     self.ctx.ptr_type(AddressSpace::default()),
                     var_ptr,
                     "prev_expr_ptr",
                 )?;
-                self.free_pointer(old_expr_ptr.into_pointer_value(), var_type_id, env)?;
+                self.free_pointer(old_expr_ptr.into_pointer_value(), var_tid, env)?;
 
-                assert_eq!(var_type_id, expr_type_id); // TODO: Gen Error
+                assert_eq!(var_tid, expr_tid); // TODO: Gen Error
 
                 self.builder.build_store(var_ptr, expr_ptr)?;
             }
@@ -180,8 +180,8 @@ impl<'ctx> CodeGen<'ctx> {
                 self.compile_return(expr, env)?;
             }
             Statement::Expression(expression) => {
-                let (ptr, ptr_type_id) = self.compile_expression(expression, env)?;
-                self.free_pointer(ptr, ptr_type_id, env)?;
+                let (ptr, ptr_tid) = self.compile_expression(expression, env)?;
+                self.free_pointer(ptr, ptr_tid, env)?;
             }
             Statement::IfStatement {
                 condition,
