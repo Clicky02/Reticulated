@@ -3,6 +3,7 @@ pub enum Expression {
     Binary(Box<Expression>, BinaryOp, Box<Expression>),
     Unary(UnaryOp, Box<Expression>),
     Invoke(Box<Expression>, Vec<Expression>),
+    Access(Box<Expression>, String),
     Primary(Primary),
 }
 

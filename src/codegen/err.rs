@@ -9,6 +9,7 @@ pub enum GenError {
     InvalidType,
     IdentConflict,
     VariableNotFound,
+    FieldNotFound,
     Build(BuilderError),
 }
 

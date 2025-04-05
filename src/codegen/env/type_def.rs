@@ -1,5 +1,7 @@
 use inkwell::types::StructType;
 
+use crate::codegen::err::GenError;
+
 use super::id::TypeId;
 
 // #[derive(Debug)]
@@ -8,15 +10,36 @@ use super::id::TypeId;
 //     UserDefined { fields: Vec<TypeId> },
 // }
 
+#[derive(Debug, Clone)]
+pub struct Field(u32, String, TypeId); // index, ident, type
+
+impl Field {
+    pub fn new(index: u32, ident: impl ToString, type_id: TypeId) -> Self {
+        Self(index, ident.to_string(), type_id)
+    }
+
+    pub fn index(&self) -> u32 {
+        self.0
+    }
+
+    pub fn ident(&self) -> &str {
+        &self.1
+    }
+
+    pub fn type_id(&self) -> TypeId {
+        self.2
+    }
+}
+
 #[derive(Debug)]
 pub struct TypeDef<'ctx> {
     ident: String,
     value: StructType<'ctx>,
-    fields: Vec<TypeId>,
+    fields: Vec<Field>,
 }
 
 impl<'ctx> TypeDef<'ctx> {
-    pub fn new(ident: impl ToString, value: StructType<'ctx>, fields: Vec<TypeId>) -> Self {
+    pub fn new(ident: impl ToString, value: StructType<'ctx>, fields: Vec<Field>) -> Self {
         Self {
             ident: ident.to_string(),
             value,
@@ -40,7 +63,16 @@ impl<'ctx> TypeDef<'ctx> {
         &self.ident
     }
 
-    pub fn fields(&self) -> &[TypeId] {
+    pub fn find_field(&self, ident: &str) -> Result<&Field, GenError> {
+        for field in &self.fields {
+            if field.1 == ident {
+                return Ok(field);
+            }
+        }
+        Err(GenError::FieldNotFound)
+    }
+
+    pub fn fields(&self) -> &[Field] {
         &self.fields
     }
 }

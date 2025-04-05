@@ -24,10 +24,37 @@ impl<'ctx> CodeGen<'ctx> {
             Expression::Binary(left, op, right) => self.compile_binary(left, op, right, env)?,
             Expression::Unary(op, expr) => self.compile_unary(op, expr, env)?,
             Expression::Invoke(expr, params) => self.compile_invoke(expr, params, env)?,
+            Expression::Access(expr, id) => self.compile_access(expr, id, env)?,
             Expression::Primary(primary) => self.compile_primary(primary, env)?,
         };
 
         Ok(val)
+    }
+
+    fn compile_access(
+        &mut self,
+        expr: &Box<Expression>,
+        ident: &String,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
+        let (expr_ptr, expr_type) = self.compile_expression(expr, env)?;
+        let type_def = env.get_type(expr_type);
+        let struct_type = type_def.ink();
+
+        let field = type_def.find_field(&ident)?;
+        let field_ptr = self.builder.build_struct_gep(
+            struct_type,
+            expr_ptr,
+            field.index(),
+            &(ident.to_owned() + "_field"),
+        )?;
+
+        let field_val = self
+            .builder
+            .build_load(self.ctx.ptr_type(AddressSpace::default()), field_ptr, "_")?
+            .into_pointer_value();
+
+        Ok((field_val, field.type_id()))
     }
 
     fn compile_invoke(

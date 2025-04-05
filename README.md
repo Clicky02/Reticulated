@@ -33,7 +33,7 @@ fn hello(name: string) -> string {
 program -> statement*
 statement -> (declaration | assignment | function_declaration | extern_function | if_statement | return_statement | expression | struct_declaration | while_loop) "\n"
 declaration -> IDENTIFIER ":" IDENTIFIER "=" expression
-assignment -> IDENTIFIER "=" expression
+assignment -> IDENTIFIER ("." IDENTIFIER)*  "=" expression
 function_declaration -> "def" IDENTIFIER "(" parameters ")" "->" IDENTIFIER block
 extern_function -> "extern" "def" IDENTIFIER "(" parameters ")" "->" IDENTIFIER
 if_statement -> "if" expression block ("else" "if" expression block)* ("else" block )?
@@ -51,8 +51,10 @@ comparison ->  term ( ( ">" | ">=" | "<" | "<=" ) term )*
 term -> factor ( ( "-" | "+" ) factor )*
 factor -> unary ( ( "/" | "*" | "%" ) unary )*
 unary -> ( "!" | "-" ) unary | invoke
-invoke -> (invoke | primary)  "(" parameter_values ")"
+invoke -> (invoke | access)  "(" parameter_values ")"
+access -> (access | primary) "." IDENTIFIER
 primary -> IDENTIFIER | INTEGER | FLOAT | STRING | BOOL | NONE | "(" expression ")"
+
 parameter_values -> (expression ("," expression)*)?
 ```
 

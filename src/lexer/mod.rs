@@ -148,7 +148,7 @@ impl<R: ReadSource> Iterator for Lexer<R> {
                 if self.consume_expected($exp_char) {
                     $token
                 } else {
-                    TokenKind::Invalid
+                    TokenKind::Invalid($exp_char.to_string())
                 }
             };
             ($exp_char:literal => $token:expr, _ => $default:expr,) => {
@@ -193,6 +193,7 @@ impl<R: ReadSource> Iterator for Lexer<R> {
                 ',' => TokenKind::Comma,
                 ';' => TokenKind::SemiColon,
                 ':' => TokenKind::Colon,
+                '.' => TokenKind::Period,
 
                 '+' => followed_by!(
                     '=' => TokenKind::Operator(OperatorKind::AddAssign),
@@ -238,7 +239,7 @@ impl<R: ReadSource> Iterator for Lexer<R> {
                 '"' => self.consume_string().unwrap(),
                 _ if ch.is_alphabetic() => self.consume_identifier(),
                 _ if ch.is_digit(10) => self.consume_number(),
-                _ => TokenKind::Invalid,
+                t => TokenKind::Invalid(t.to_string()),
             },
             None => {
                 self.reached_eof = true;

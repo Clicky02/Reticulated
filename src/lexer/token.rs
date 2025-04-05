@@ -41,10 +41,11 @@ pub enum TokenKind {
     SemiColon,
     Colon,
     Arrow,
+    Period,
 
     EOF,
 
-    Invalid,
+    Invalid(String),
 }
 
 impl std::fmt::Display for TokenKind {
@@ -63,9 +64,10 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Comma => write!(f, "Comma"),
             TokenKind::SemiColon => write!(f, "SemiColon"),
             TokenKind::Colon => write!(f, "Colon"),
+            TokenKind::Period => write!(f, "Period"),
             TokenKind::Arrow => write!(f, "Arrow"),
             TokenKind::EOF => write!(f, "EOF"),
-            TokenKind::Invalid => write!(f, "Invalid"),
+            TokenKind::Invalid(t) => write!(f, "Invalid token ({})", t),
         }
     }
 }

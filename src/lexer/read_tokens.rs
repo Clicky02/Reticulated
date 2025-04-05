@@ -1,21 +1,25 @@
+use anyhow::{anyhow, Result};
+
 use crate::read::Read;
 
 use super::{KeywordKind, OperatorKind, Token, TokenKind};
 
 pub trait ReadTokens: Read<Token> {
-    fn expect(&mut self, kind: TokenKind) -> Result<(), String> {
+    fn expect(&mut self, kind: TokenKind) -> Result<()> {
         let next_token = self.advance();
         if let Some(next_token) = next_token {
             if next_token.kind == kind {
                 Ok(())
             } else {
-                Err(format!(
+                Err(anyhow!(
                     "Unexpected token `{}` at {}, expected {}.",
-                    next_token.kind, next_token.span.start, kind
+                    next_token.kind,
+                    next_token.span.start,
+                    kind
                 )) // TODO: Real error, better formatting
             }
         } else {
-            Err("Unexpected end of input.".into())
+            Err(anyhow!("Unexpected end of input."))
         }
     }
 
@@ -33,23 +37,27 @@ pub trait ReadTokens: Read<Token> {
         }
     }
 
-    fn expect_operator(&mut self, kind: OperatorKind) -> Result<(), String> {
+    fn expect_operator(&mut self, kind: OperatorKind) -> Result<()> {
         self.expect(TokenKind::Operator(kind))
     }
 
-    fn expect_keyword(&mut self, kind: KeywordKind) -> Result<(), String> {
+    fn expect_keyword(&mut self, kind: KeywordKind) -> Result<()> {
         self.expect(TokenKind::Keyword(kind))
     }
 
-    fn expect_identifier(&mut self) -> Result<String, String> {
+    fn expect_identifier(&mut self) -> Result<String> {
         let token = self.advance();
         match token {
             Some(Token {
                 kind: TokenKind::Identifier(identifier),
                 ..
             }) => Ok(identifier),
-            Some(token) => Err(format!("Expected identifier, found {:?}", token)),
-            _ => Err("Unexpected end of input.".into()),
+            Some(token) => Err(anyhow!(
+                "Expected identifier at {}, found {}",
+                token.span,
+                token.kind
+            )),
+            _ => Err(anyhow!("Unexpected end of input.")),
         }
     }
 }

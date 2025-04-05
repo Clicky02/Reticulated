@@ -4,3 +4,4 @@ struct TestStruct {
 }
 
 test: TestStruct = TestStruct(1, "a")
+print(test.test_str)

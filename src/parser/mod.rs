@@ -1,6 +1,8 @@
-use core::panic;
-
 use crate::lexer::{KeywordKind, LiteralKind, OperatorKind, ReadTokens, Token, TokenKind};
+
+use anyhow::{anyhow, Result};
+
+use core::panic;
 
 mod expression;
 mod statement;
@@ -22,7 +24,7 @@ impl<R: ReadTokens> Parser<R> {
     }
 
     /// Parses the tokens into an AST.
-    pub fn parse(&mut self) -> Result<Vec<Statement>, String> {
+    pub fn parse(&mut self) -> Result<Vec<Statement>> {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
@@ -44,7 +46,7 @@ impl<R: ReadTokens> Parser<R> {
         }
     }
 
-    fn statement(&mut self) -> Result<Statement, String> {
+    fn statement(&mut self) -> Result<Statement> {
         // statement -> (declaration | assignment | function_declaration | extern_function
         // | if_statement | return_statement | expression) "\n"
 
@@ -68,7 +70,7 @@ impl<R: ReadTokens> Parser<R> {
         Ok(statement)
     }
 
-    fn declaration(&mut self) -> Result<Statement, String> {
+    fn declaration(&mut self) -> Result<Statement> {
         // declaration -> IDENTIFIER ":" IDENTIFIER "=" expression
 
         let identifier = self.tokens.expect_identifier()?;
@@ -88,7 +90,7 @@ impl<R: ReadTokens> Parser<R> {
         })
     }
 
-    fn assignment(&mut self) -> Result<Statement, String> {
+    fn assignment(&mut self) -> Result<Statement> {
         // assignment -> IDENTIFIER "=" expression
 
         let identifier = self.tokens.expect_identifier()?;
@@ -101,7 +103,7 @@ impl<R: ReadTokens> Parser<R> {
         })
     }
 
-    fn fn_declaration(&mut self) -> Result<Statement, String> {
+    fn fn_declaration(&mut self) -> Result<Statement> {
         // function_declaration -> "fn" IDENTIFIER "(" parameters ")" "->" IDENTIFIER block
 
         self.tokens.expect_keyword(KeywordKind::Def)?;
@@ -127,7 +129,7 @@ impl<R: ReadTokens> Parser<R> {
         })
     }
 
-    fn extern_fn_declaration(&mut self) -> Result<Statement, String> {
+    fn extern_fn_declaration(&mut self) -> Result<Statement> {
         // extern_function -> "extern" "def" IDENTIFIER "(" extern_parameters ")" "->" IDENTIFIER
 
         self.tokens.expect_keyword(KeywordKind::Extern)?;
@@ -151,7 +153,7 @@ impl<R: ReadTokens> Parser<R> {
         })
     }
 
-    fn fn_parameters(&mut self) -> Result<Vec<FuncParameter>, String> {
+    fn fn_parameters(&mut self) -> Result<Vec<FuncParameter>> {
         // parameters -> (IDENTIFIER ":" IDENTIFIER ("," IDENTIFIER ":" IDENTIFIER)* ("," "*")?)?
 
         let mut params = Vec::new();
@@ -182,7 +184,7 @@ impl<R: ReadTokens> Parser<R> {
         Ok(params)
     }
 
-    fn if_statement(&mut self) -> Result<Statement, String> {
+    fn if_statement(&mut self) -> Result<Statement> {
         // if_statement -> "if" expression block ("else" "if" expression block)* ("else" block)?
 
         self.tokens.expect_keyword(KeywordKind::If)?;
@@ -219,7 +221,7 @@ impl<R: ReadTokens> Parser<R> {
         })
     }
 
-    fn return_statement(&mut self) -> Result<Statement, String> {
+    fn return_statement(&mut self) -> Result<Statement> {
         // return_statement -> "return" expression
 
         self.tokens.expect_keyword(KeywordKind::Return)?;
@@ -228,7 +230,7 @@ impl<R: ReadTokens> Parser<R> {
         Ok(Statement::ReturnStatement { expression })
     }
 
-    fn struct_definition(&mut self) -> Result<Statement, String> {
+    fn struct_definition(&mut self) -> Result<Statement> {
         // struct_declaration -> "struct" IDENTIFIER "{" (struct_field",")* "}"
         // struct_field -> IDENTIFIER: IDENTIFIER
 
@@ -253,7 +255,7 @@ impl<R: ReadTokens> Parser<R> {
         Ok(Statement::StructDefinition { identifier, fields })
     }
 
-    fn while_loop(&mut self) -> Result<Statement, String> {
+    fn while_loop(&mut self) -> Result<Statement> {
         // while_loop -> "while" expression block
 
         self.tokens.expect_keyword(KeywordKind::While)?;
@@ -268,7 +270,7 @@ impl<R: ReadTokens> Parser<R> {
         })
     }
 
-    fn block(&mut self) -> Result<Vec<Statement>, String> {
+    fn block(&mut self) -> Result<Vec<Statement>> {
         let mut statements = Vec::new();
 
         self.tokens.expect(TokenKind::OpenBrace)?;
@@ -282,11 +284,11 @@ impl<R: ReadTokens> Parser<R> {
         Ok(statements)
     }
 
-    fn expression(&mut self) -> Result<Expression, String> {
+    fn expression(&mut self) -> Result<Expression> {
         self.logical()
     }
 
-    fn logical(&mut self) -> Result<Expression, String> {
+    fn logical(&mut self) -> Result<Expression> {
         // logical -> equality ( ("or" | "and") equality )*
 
         let mut expr = self.equality()?;
@@ -299,7 +301,7 @@ impl<R: ReadTokens> Parser<R> {
         Ok(expr)
     }
 
-    fn equality(&mut self) -> Result<Expression, String> {
+    fn equality(&mut self) -> Result<Expression> {
         let mut expr = self.comparison()?;
 
         while let Some(op) = self.match_equality_op() {
@@ -310,7 +312,7 @@ impl<R: ReadTokens> Parser<R> {
         Ok(expr)
     }
 
-    fn comparison(&mut self) -> Result<Expression, String> {
+    fn comparison(&mut self) -> Result<Expression> {
         let mut expr = self.term()?;
 
         while let Some(op) = self.match_comparison_op() {
@@ -321,7 +323,7 @@ impl<R: ReadTokens> Parser<R> {
         Ok(expr)
     }
 
-    fn term(&mut self) -> Result<Expression, String> {
+    fn term(&mut self) -> Result<Expression> {
         let mut expr = self.factor()?;
 
         while let Some(op) = self.match_term_op() {
@@ -332,7 +334,7 @@ impl<R: ReadTokens> Parser<R> {
         Ok(expr)
     }
 
-    fn factor(&mut self) -> Result<Expression, String> {
+    fn factor(&mut self) -> Result<Expression> {
         let mut expr = self.unary()?;
 
         while let Some(op) = self.match_factor_op() {
@@ -343,7 +345,7 @@ impl<R: ReadTokens> Parser<R> {
         Ok(expr)
     }
 
-    fn unary(&mut self) -> Result<Expression, String> {
+    fn unary(&mut self) -> Result<Expression> {
         // unary -> ( "!" | "-" ) unary | invoke
 
         if let Some(op) = self.match_unary_op() {
@@ -354,10 +356,10 @@ impl<R: ReadTokens> Parser<R> {
         self.invoke()
     }
 
-    fn invoke(&mut self) -> Result<Expression, String> {
-        // invoke -> (invoke | primary) "(" parameter_values ")"
+    fn invoke(&mut self) -> Result<Expression> {
+        // invoke -> (invoke | access)  "(" parameter_values ")"
 
-        let mut expr = self.primary()?;
+        let mut expr = self.access()?;
 
         while self.tokens.check(TokenKind::OpenParenthesis) {
             // allow multiple invokations in a row
@@ -384,11 +386,25 @@ impl<R: ReadTokens> Parser<R> {
         Ok(expr)
     }
 
-    fn primary(&mut self) -> Result<Expression, String> {
+    fn access(&mut self) -> Result<Expression> {
+        // access -> (access | primary) "." IDENTIFIER
+
+        let mut expr = self.primary()?;
+
+        while self.tokens.check(TokenKind::Period) {
+            self.tokens.advance(); // eat the period
+            let member = self.tokens.expect_identifier()?;
+            expr = Expression::Access(Box::new(expr), member);
+        }
+
+        Ok(expr)
+    }
+
+    fn primary(&mut self) -> Result<Expression> {
         // primary -> IDENTIFIER | LITERAL | "(" expression ")"
 
         let Some(next) = self.tokens.advance() else {
-            return Err("Unexpectedly reached end of input.".into());
+            return Err(anyhow!("Unexpectedly reached end of input."));
         };
 
         match next.kind {
@@ -413,9 +429,10 @@ impl<R: ReadTokens> Parser<R> {
                 self.tokens.expect(TokenKind::CloseParenthesis)?;
                 Ok(Expression::Primary(Primary::Grouping(Box::new(expr))))
             }
-            _ => Err(format!(
+            _ => Err(anyhow!(
                 "Expected primary expression at {} found {}",
-                next.span.start, next.kind
+                next.span.start,
+                next.kind
             )),
         }
     }

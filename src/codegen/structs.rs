@@ -6,7 +6,11 @@ use inkwell::{
 use crate::codegen::ink_extension::{InkTypeExt, InkValueExt};
 
 use super::{
-    env::{id::TypeId, type_def::TypeDef, Environment},
+    env::{
+        id::TypeId,
+        type_def::{Field, TypeDef},
+        Environment,
+    },
     err::GenError,
     util::FREE_PTR_IDENT,
     CodeGen,
@@ -16,15 +20,17 @@ impl<'ctx> CodeGen<'ctx> {
     pub(super) fn preprocess_struct_definition(
         &mut self,
         ident: &str,
-        fields: &[(String, String)],
+        field_defs: &[(String, String)],
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
-        let field_types = fields
-            .iter()
-            .map(|(_, type_ident)| env.find_type(type_ident))
-            .collect::<Result<Vec<_>, GenError>>()?;
+        let mut fields = Vec::new();
+        for i in 0..field_defs.len() {
+            let (field_ident, field_type_ident) = &field_defs[i];
+            let field_type = env.find_type(field_type_ident)?;
+            fields.push(Field::new(i as u32, field_ident, field_type));
+        }
 
-        let field_ptr_types = field_types
+        let field_ptr_types = fields
             .iter()
             .map(|_| self.ptr_type().as_basic_type_enum())
             .collect();
@@ -32,11 +38,7 @@ impl<'ctx> CodeGen<'ctx> {
         let struct_type = self.create_struct_type(ident, field_ptr_types);
 
         let type_id = env.gen_type_id();
-        env.register_type(
-            ident,
-            type_id,
-            TypeDef::new(ident, struct_type, field_types),
-        )?;
+        env.register_type(ident, type_id, TypeDef::new(ident, struct_type, fields))?;
 
         Ok(())
     }
@@ -128,9 +130,10 @@ impl<'ctx> CodeGen<'ctx> {
         let fields = type_def.fields();
 
         for i in 0..fields.len() {
-            let field = fields[i];
+            let field = &fields[i];
+            let field_type = field.type_id();
             let free_id: super::env::id::FunctionId =
-                env.find_func(FREE_PTR_IDENT, Some(field), &[field])?;
+                env.find_func(FREE_PTR_IDENT, Some(field_type), &[field_type])?;
             let field_ptr_ptr =
                 gen.builder
                     .build_struct_gep(ink_type, ptr, i as u32, "field_ptr_ptr")?;
@@ -151,7 +154,11 @@ impl<'ctx> CodeGen<'ctx> {
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let type_def = type_id.get_from(env);
-        let fields = type_def.fields().to_vec();
+        let fields: Vec<TypeId> = type_def
+            .fields()
+            .iter()
+            .map(|field| field.type_id())
+            .collect();
         let struct_type = type_def.ink();
 
         let (fn_val, ..) = env.create_func(None, ident, &fields, type_id, false)?;
