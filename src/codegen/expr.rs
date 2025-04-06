@@ -61,22 +61,28 @@ impl<'ctx> CodeGen<'ctx> {
         args: &Vec<Expression>,
         env: &mut Environment<'ctx>,
     ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
-        let Expression::Primary(Primary::Identifier(ident)) = callee.deref() else {
-            todo!("Add first-class function support")
-        };
-
         let params = args
             .into_iter()
             .map(|val| self.compile_expression(val, env))
             .collect::<Result<Vec<_>, GenError>>()?;
-        let (param_vals, param_tids): (Vec<_>, Vec<_>) = params.into_iter().unzip();
+        let (mut param_vals, mut param_tids): (Vec<_>, Vec<_>) = params.into_iter().unzip();
 
-        let fn_id = match ident.as_str() {
-            "str" => env.find_func(TO_STR_FN, param_tids.get(0).copied(), &param_tids)?,
-            "int" => env.find_func(TO_INT_FN, param_tids.get(0).copied(), &param_tids)?,
-            "float" => env.find_func(TO_FLOAT_FN, param_tids.get(0).copied(), &param_tids)?,
-            "bool" => env.find_func(TO_BOOL_FN, param_tids.get(0).copied(), &param_tids)?,
-            _ => env.find_func(ident, None, &param_tids)?,
+        let fn_id = match callee.deref() {
+            Expression::Primary(Primary::Identifier(ident)) => match ident.as_str() {
+                "str" => env.find_func(TO_STR_FN, param_tids.get(0).copied(), &param_tids)?,
+                "int" => env.find_func(TO_INT_FN, param_tids.get(0).copied(), &param_tids)?,
+                "float" => env.find_func(TO_FLOAT_FN, param_tids.get(0).copied(), &param_tids)?,
+                "bool" => env.find_func(TO_BOOL_FN, param_tids.get(0).copied(), &param_tids)?,
+                _ => env.find_func(ident, None, &param_tids)?,
+            },
+            Expression::Access(expr, ident) => {
+                let (expr_ptr, expr_tid) = self.compile_expression(expr, env)?;
+
+                param_tids.insert(0, expr_tid);
+                param_vals.insert(0, expr_ptr);
+                env.find_func(ident, Some(expr_tid), &param_tids)?
+            }
+            _ => todo!("Add first-class function support."),
         };
 
         self.call_func(fn_id, &param_vals, env)
