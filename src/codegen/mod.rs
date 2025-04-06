@@ -106,15 +106,12 @@ impl<'ctx> CodeGen<'ctx> {
         env: &mut env::Environment<'ctx>,
     ) -> Result<(), GenError> {
         match statement {
-            Statement::FunctionDeclaration {
+            Statement::FunctionDeclaration(fn_dec) => self.preprocess_fn(None, fn_dec, env),
+            Statement::StructDefinition {
                 identifier,
-                parameters,
-                return_identifier,
-                body,
-            } => self.preprocess_fn(identifier, parameters, return_identifier, body, env),
-            Statement::StructDefinition { identifier, fields } => {
-                self.preprocess_struct_definition(identifier, fields, env)
-            }
+                fields,
+                fns,
+            } => self.preprocess_struct_definition(identifier, fields, fns, env),
             _ => Ok(()),
         }
     }
@@ -163,13 +160,8 @@ impl<'ctx> CodeGen<'ctx> {
 
                 self.builder.build_store(var_ptr, expr_ptr)?;
             }
-            Statement::FunctionDeclaration {
-                identifier,
-                parameters,
-                return_identifier,
-                body,
-            } => {
-                self.compile_fn(identifier, parameters, return_identifier, body, env)?;
+            Statement::FunctionDeclaration(fn_dec) => {
+                self.compile_fn(None, fn_dec, env)?;
             }
             Statement::ExternFunctionDeclaration {
                 identifier: _,
@@ -195,8 +187,12 @@ impl<'ctx> CodeGen<'ctx> {
                 else_branch,
                 env,
             )?,
-            Statement::StructDefinition { identifier, fields } => {
-                self.compile_struct_definition(identifier, fields, env)?;
+            Statement::StructDefinition {
+                identifier,
+                fields,
+                fns,
+            } => {
+                self.compile_struct_definition(identifier, fields, fns, env)?;
             }
             Statement::WhileLoop { condition, block } => {
                 self.compile_while_loop(condition, block, env)?

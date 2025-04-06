@@ -1,8 +1,26 @@
-a: bool = True
+struct Vec {
+    x: int,
+    y: int,
 
-print(str(a))
-print(str(not a))
-print(str(a and True))
-print(str(a and False))
-print(str(False or a))
-print(str(False or not a))
+    def __add__(self, other: Vec) -> Vec {
+        return Vec(self.x + other.x, self.y + other.y)
+    }
+
+    def __add__(self, other: int) -> Vec {
+        return Vec(self.x + other, self.y + other)
+    }
+
+    def __str__(self) -> str {
+        return  "Vec(" + str(self.x) + ", " + str(self.y) + ")"
+    }
+}
+
+a: Vec = Vec(2, 5)
+b: Vec = Vec(6, 1)
+c: Vec = a + b
+d: Vec = a + 1
+
+print("a: " + str(a))
+print("b: " + str(b))
+print("c: " + str(c))
+print("d: " + str(d))

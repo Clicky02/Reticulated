@@ -153,4 +153,5 @@ pub enum KeywordKind {
     Return,
     Extern,
     Struct,
+    Self_,
 }

@@ -39,9 +39,10 @@ extern_function -> "extern" "def" IDENTIFIER "(" parameters ")" "->" IDENTIFIER
 if_statement -> "if" expression block ("else" "if" expression block)* ("else" block )?
 return_statement -> "return" expression
 block -> "{" statement* "}"
-parameters -> (IDENTIFIER ":" IDENTIFIER ("," "*"? IDENTIFIER ":" IDENTIFIER)*)?
-struct_declaration -> "struct" IDENTIFIER "{" (struct_field",")* "}"
-struct_field -> IDENTIFIER: IDENTIFIER
+parameters -> ("self" ",")? (parameter ("," "*"? parameter)*)?
+parameter -> IDENTIFIER ":" IDENTIFIER
+struct_declaration -> "struct" IDENTIFIER "{" struct_field* "}"
+struct_field -> IDENTIFIER: IDENTIFIER "," | function_declaration
 while_loop -> "while" expression block
 
 expression -> equality
@@ -51,11 +52,11 @@ comparison ->  term ( ( ">" | ">=" | "<" | "<=" ) term )*
 term -> factor ( ( "-" | "+" ) factor )*
 factor -> unary ( ( "/" | "*" | "%" ) unary )*
 unary -> ( "!" | "-" ) unary | invoke
-invoke -> (invoke | access)  "(" parameter_values ")"
+invoke -> (invoke | access)  "(" arguments ")"
 access -> (access | primary) "." IDENTIFIER
 primary -> IDENTIFIER | INTEGER | FLOAT | STRING | BOOL | NONE | "(" expression ")"
 
-parameter_values -> (expression ("," expression)*)?
+arguments -> (expression ("," expression)*)?
 ```
 
 ## Project Goals

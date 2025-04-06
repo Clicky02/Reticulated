@@ -38,14 +38,21 @@ impl<'ctx> CodeGen<'ctx> {
         env: &mut Environment<'ctx>,
     ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
         let (expr_ptr, expr_tid) = self.compile_expression(expr, env)?;
-        let (field_ptr, field_tid) = self.build_gep_field(expr_ptr, expr_tid, ident, env)?;
+        let (field_ptr_ptr, field_tid) = self.build_gep_field(expr_ptr, expr_tid, ident, env)?;
 
-        let field_val = self
+        let field_ptr = self
             .builder
-            .build_load(self.ctx.ptr_type(AddressSpace::default()), field_ptr, "_")?
+            .build_load(
+                self.ctx.ptr_type(AddressSpace::default()),
+                field_ptr_ptr,
+                "_",
+            )?
             .into_pointer_value();
 
-        Ok((field_val, field_tid))
+        self.copy_pointer(field_ptr, field_tid, env)?;
+        self.free_pointer(expr_ptr, expr_tid, env)?;
+
+        Ok((field_ptr, field_tid))
     }
 
     fn compile_invoke(

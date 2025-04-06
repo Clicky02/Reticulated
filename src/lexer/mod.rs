@@ -93,6 +93,7 @@ impl<R: ReadSource> Lexer<R> {
             "for" => TokenKind::Keyword(KeywordKind::For),
             "while" => TokenKind::Keyword(KeywordKind::While),
             "return" => TokenKind::Keyword(KeywordKind::Return),
+            "self" => TokenKind::Keyword(KeywordKind::Self_),
 
             // TODO: Should these be keywords?
             "or" => TokenKind::Operator(OperatorKind::Or),
@@ -237,6 +238,7 @@ impl<R: ReadSource> Iterator for Lexer<R> {
                 '|' => followed_by!('|' => TokenKind::Operator(OperatorKind::Or)),
 
                 '"' => self.consume_string().unwrap(),
+                '_' => self.consume_identifier(),
                 _ if ch.is_alphabetic() => self.consume_identifier(),
                 _ if ch.is_digit(10) => self.consume_number(),
                 t => TokenKind::Invalid(t.to_string()),

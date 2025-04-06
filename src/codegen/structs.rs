@@ -3,7 +3,10 @@ use inkwell::{
     values::{BasicValueEnum, PointerValue},
 };
 
-use crate::codegen::ink_extension::{InkTypeExt, InkValueExt};
+use crate::{
+    codegen::ink_extension::{InkTypeExt, InkValueExt},
+    parser::FuncDeclaration,
+};
 
 use super::{
     env::{
@@ -21,6 +24,7 @@ impl<'ctx> CodeGen<'ctx> {
         &mut self,
         ident: &str,
         field_defs: &[(String, String)],
+        fns: &[FuncDeclaration],
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let mut fields = Vec::new();
@@ -40,6 +44,10 @@ impl<'ctx> CodeGen<'ctx> {
         let tid = env.gen_type_id();
         env.register_type(ident, tid, TypeDef::new(ident, struct_type, fields))?;
 
+        for fn_dec in fns {
+            self.preprocess_fn(Some(tid), fn_dec, env)?;
+        }
+
         Ok(())
     }
 
@@ -47,6 +55,7 @@ impl<'ctx> CodeGen<'ctx> {
         &mut self,
         ident: &str,
         _fields: &[(String, String)],
+        fns: &[FuncDeclaration],
         env: &mut Environment<'ctx>,
     ) -> Result<(), GenError> {
         let tid = env.find_type(ident)?;
@@ -58,6 +67,11 @@ impl<'ctx> CodeGen<'ctx> {
 
         // Constructor
         self.build_struct_constructor(ident, tid, env)?;
+
+        // Compile all user functions
+        for fn_dec in fns {
+            self.compile_fn(Some(tid), fn_dec, env)?;
+        }
 
         self.builder.position_at_end(prev_block);
         Ok(())

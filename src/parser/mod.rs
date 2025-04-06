@@ -1,4 +1,7 @@
-use crate::lexer::{KeywordKind, LiteralKind, OperatorKind, ReadTokens, Token, TokenKind};
+use crate::{
+    anyhow_ext::AnyhowResultExt,
+    lexer::{KeywordKind, LiteralKind, OperatorKind, ReadTokens, Token, TokenKind},
+};
 
 use anyhow::{anyhow, Result};
 
@@ -50,19 +53,36 @@ impl<R: ReadTokens> Parser<R> {
         // statement -> (declaration | assignment | function_declaration | extern_function
         // | if_statement | return_statement | expression) "\n"
 
-        let statement = match self.tokens.peek_next().kind {
+        let next = self.tokens.peek_next();
+        let pos = next.span.start;
+        let statement = match next.kind {
             TokenKind::Identifier(_) => match self.tokens.peek(1).kind {
-                TokenKind::Colon => self.declaration()?,
-                TokenKind::Operator(OperatorKind::Assign) => self.assignment()?,
-                _ => self.expr_statement()?,
+                TokenKind::Colon => self.declaration().parsing_ctx("declaration", pos)?,
+                TokenKind::Operator(OperatorKind::Assign) => {
+                    self.assignment().parsing_ctx("assignment", pos)?
+                }
+                _ => self.expr_statement().parsing_ctx("expression", pos)?,
             },
-            TokenKind::Keyword(KeywordKind::Def) => self.fn_declaration()?,
-            TokenKind::Keyword(KeywordKind::Extern) => self.extern_fn_declaration()?,
-            TokenKind::Keyword(KeywordKind::If) => self.if_statement()?,
-            TokenKind::Keyword(KeywordKind::Return) => self.return_statement()?,
-            TokenKind::Keyword(KeywordKind::Struct) => self.struct_definition()?,
-            TokenKind::Keyword(KeywordKind::While) => self.while_loop()?,
-            _ => self.expr_statement()?,
+            TokenKind::Keyword(KeywordKind::Def) => Statement::FunctionDeclaration(
+                self.fn_declaration()
+                    .parsing_ctx("function declaration", pos)?,
+            ),
+            TokenKind::Keyword(KeywordKind::Extern) => self
+                .extern_fn_declaration()
+                .parsing_ctx("function declaration", pos)?,
+            TokenKind::Keyword(KeywordKind::If) => {
+                self.if_statement().parsing_ctx("if statement", pos)?
+            }
+            TokenKind::Keyword(KeywordKind::Return) => self
+                .return_statement()
+                .parsing_ctx("return statement", pos)?,
+            TokenKind::Keyword(KeywordKind::Struct) => {
+                self.struct_definition().parsing_ctx("struct", pos)?
+            }
+            TokenKind::Keyword(KeywordKind::While) => {
+                self.while_loop().parsing_ctx("while loop", pos)?
+            }
+            _ => self.expr_statement().parsing_ctx("expression", pos)?,
         };
 
         // TODO: Newline?
@@ -130,7 +150,7 @@ impl<R: ReadTokens> Parser<R> {
         })
     }
 
-    fn fn_declaration(&mut self) -> Result<Statement> {
+    fn fn_declaration(&mut self) -> Result<FuncDeclaration> {
         // function_declaration -> "fn" IDENTIFIER "(" parameters ")" "->" IDENTIFIER block
 
         self.tokens.expect_keyword(KeywordKind::Def)?;
@@ -139,7 +159,7 @@ impl<R: ReadTokens> Parser<R> {
 
         self.tokens.expect(TokenKind::OpenParenthesis)?;
 
-        let parameters = self.fn_parameters()?;
+        let (takes_self, parameters) = self.fn_parameters()?;
 
         self.tokens.expect(TokenKind::CloseParenthesis)?;
         self.tokens.expect(TokenKind::Arrow)?;
@@ -148,12 +168,13 @@ impl<R: ReadTokens> Parser<R> {
 
         let body = self.block()?;
 
-        Ok(Statement::FunctionDeclaration {
+        Ok(FuncDeclaration::new(
             identifier,
+            takes_self,
             parameters,
             return_identifier,
             body,
-        })
+        ))
     }
 
     fn extern_fn_declaration(&mut self) -> Result<Statement> {
@@ -166,7 +187,12 @@ impl<R: ReadTokens> Parser<R> {
 
         self.tokens.expect(TokenKind::OpenParenthesis)?;
 
-        let parameters = self.fn_parameters()?;
+        let (has_self, parameters) = self.fn_parameters()?;
+        if has_self {
+            return Err(anyhow!(
+                "Extern functions cannot have 'self' as a parameter."
+            ));
+        }
 
         self.tokens.expect(TokenKind::CloseParenthesis)?;
         self.tokens.expect(TokenKind::Arrow)?;
@@ -180,12 +206,27 @@ impl<R: ReadTokens> Parser<R> {
         })
     }
 
-    fn fn_parameters(&mut self) -> Result<Vec<FuncParameter>> {
-        // parameters -> (IDENTIFIER ":" IDENTIFIER ("," IDENTIFIER ":" IDENTIFIER)* ("," "*")?)?
+    fn fn_parameters(&mut self) -> Result<(bool, Vec<FuncParameter>)> {
+        // parameters -> ("self" ",")? (parameter ("," "*"? parameter)*)?
+        // parameter -> IDENTIFIER ":" IDENTIFIER
 
         let mut params = Vec::new();
+        let mut is_first = true;
+        let has_self = if self.tokens.check(TokenKind::Keyword(KeywordKind::Self_)) {
+            self.tokens.advance();
+            is_first = false;
+            true
+        } else {
+            false
+        };
 
         while !self.tokens.check(TokenKind::CloseParenthesis) {
+            if !is_first {
+                self.tokens.expect(TokenKind::Comma)?;
+            } else {
+                is_first = false;
+            }
+
             let var_args = if self
                 .tokens
                 .check(TokenKind::Operator(OperatorKind::Multiply))
@@ -200,15 +241,9 @@ impl<R: ReadTokens> Parser<R> {
             self.tokens.expect(TokenKind::Colon)?;
             let type_identifier = self.tokens.expect_identifier()?;
             params.push(FuncParameter::new(identifier, type_identifier, var_args));
-
-            if self.tokens.check(TokenKind::Comma) {
-                self.tokens.advance();
-            } else {
-                break;
-            }
         }
 
-        Ok(params)
+        Ok((has_self, params))
     }
 
     fn if_statement(&mut self) -> Result<Statement> {
@@ -268,18 +303,49 @@ impl<R: ReadTokens> Parser<R> {
         self.tokens.expect(TokenKind::OpenBrace)?;
 
         let mut fields = Vec::new();
-        while !self.tokens.check(TokenKind::CloseBrace) {
-            let field_name = self.tokens.expect_identifier()?;
-            self.tokens.expect(TokenKind::Colon)?; // Skip the colon
-            let field_type = self.tokens.expect_identifier()?;
-            fields.push((field_name, field_type));
+        let mut fns = Vec::new();
 
-            self.tokens.expect(TokenKind::Comma)?;
+        while !self.tokens.check(TokenKind::CloseBrace) {
+            let next = self.tokens.peek_next();
+            let pos = next.span.start;
+            match &next.kind {
+                TokenKind::Keyword(KeywordKind::Def) => {
+                    let next_fn = self
+                        .fn_declaration()
+                        .parsing_ctx("function declaration", pos)?;
+                    if !next_fn.takes_self {
+                        return Err(anyhow!(
+                            "Struct methods must take 'self' as the first parameter."
+                        ));
+                    }
+                    fns.push(next_fn);
+                }
+                TokenKind::Identifier(_) => {
+                    let field_name = self.tokens.expect_identifier()?;
+                    self.tokens.expect(TokenKind::Colon)?; // Skip the colon
+
+                    let field_type = self.tokens.expect_identifier()?;
+                    fields.push((field_name, field_type));
+
+                    self.tokens.expect(TokenKind::Comma)?;
+                }
+                _ => {
+                    return Err(anyhow!(
+                        "Expected identifier or function declaration at {} found {}",
+                        next.span.start,
+                        next.kind
+                    ))
+                }
+            }
         }
 
         self.tokens.expect(TokenKind::CloseBrace)?;
 
-        Ok(Statement::StructDefinition { identifier, fields })
+        Ok(Statement::StructDefinition {
+            identifier,
+            fields,
+            fns,
+        })
     }
 
     fn while_loop(&mut self) -> Result<Statement> {
@@ -440,6 +506,9 @@ impl<R: ReadTokens> Parser<R> {
         };
 
         match next.kind {
+            TokenKind::Keyword(KeywordKind::Self_) => {
+                Ok(Expression::Primary(Primary::Identifier("self".to_string())))
+            }
             TokenKind::Literal(LiteralKind::Integer(value)) => {
                 Ok(Expression::Primary(Primary::Integer(value)))
             }

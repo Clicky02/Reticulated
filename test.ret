@@ -1,17 +1,23 @@
-extern def printf(val: str, *vals: any) -> int
+struct Vec {
+    x: int,
+    y: int,
 
-def print(val: str) -> None {
-    printf(val)
+    def __add__(self, other: Vec) -> Vec {
+        return Vec(self.x + other.x, self.y + other.y)
+    }
+
+    def __add__(self, other: int) -> Vec {
+        return Vec(self.x + other, self.y + other)
+    }
+
+    def __str__(self) -> str {
+        return  "Vec(" + str(self.x) + ", " + str(self.y) + ")"
+    }
 }
 
-age: int = 23
-
-if age < 0 or age > 200 {
-    print("Invalid age")
-} else if age < 18 {
-    print("You are a minor")
-} else {
-    print("You are an adult")
-}
-
-
+a: Vec = Vec(2, 5)
+print(str(a.x))
+print(str(a.x + 1))
+print("a: " + str(a))
+print(str(a.x))
+print(str(a.x + 1))

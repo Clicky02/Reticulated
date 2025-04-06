@@ -17,12 +17,7 @@ pub enum Statement {
         lvalue: LValue,
         expression: Expression,
     },
-    FunctionDeclaration {
-        identifier: String,
-        parameters: Vec<FuncParameter>,
-        return_identifier: String,
-        body: Vec<Statement>,
-    },
+    FunctionDeclaration(FuncDeclaration),
     ExternFunctionDeclaration {
         identifier: String,
         parameters: Vec<FuncParameter>,
@@ -41,12 +36,40 @@ pub enum Statement {
     StructDefinition {
         identifier: String,
         fields: Vec<(String, String)>,
+        fns: Vec<FuncDeclaration>,
     },
 
     WhileLoop {
         condition: Expression,
         block: Vec<Statement>,
     },
+}
+
+#[derive(Debug)]
+pub struct FuncDeclaration {
+    pub identifier: String,
+    pub takes_self: bool,
+    pub params: Vec<FuncParameter>,
+    pub return_identifier: String,
+    pub body: Vec<Statement>,
+}
+
+impl FuncDeclaration {
+    pub fn new(
+        identifier: String,
+        takes_self: bool,
+        parameters: Vec<FuncParameter>,
+        return_identifier: String,
+        body: Vec<Statement>,
+    ) -> Self {
+        Self {
+            identifier,
+            takes_self,
+            params: parameters,
+            return_identifier,
+            body,
+        }
+    }
 }
 
 #[derive(Debug)]
