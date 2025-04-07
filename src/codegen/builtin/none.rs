@@ -23,6 +23,7 @@ impl<'ctx> CodeGen<'ctx> {
     pub fn setup_none_primitive(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
         self.build_noop_copy_ptr_fn(NONE_ID, env)?;
         self.build_noop_free_ptr_fn(NONE_ID, env)?;
+        self.build_copy_ptr_fn(NONE_ID, env)?;
 
         Ok(())
     }

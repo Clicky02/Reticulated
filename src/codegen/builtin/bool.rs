@@ -34,6 +34,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         self.build_free_ptr_fn(BOOL_ID, primitive_unalloc, env)?;
         self.build_copy_ptr_fn(BOOL_ID, env)?;
+        self.build_get_reference_count_fn(BOOL_ID, env)?;
 
         // Conversion
         self.setup_bool_to_str(bool_struct, res, env)?;

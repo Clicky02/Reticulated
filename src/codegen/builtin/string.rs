@@ -44,6 +44,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         self.build_free_ptr_fn(STR_ID, str_unalloc, env)?;
         self.build_copy_ptr_fn(STR_ID, env)?;
+        self.build_get_reference_count_fn(STR_ID, env)?;
 
         // Binary Functions
         self.setup_str_eq_str(str_struct_type, env)?;

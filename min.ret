@@ -24,9 +24,9 @@ b: Vec = Vec(6.0, 1.0)
 c: Vec = a + b
 d: Vec = a + 1.0
 
-print("a: " + str(a))
-print("b: " + str(b))
-print("c: " + str(c))
-print("d: " + str(d))
+print("a: " + str(a) + " | " + str(ref_count(a)))
+print("b: " + str(b) + " | " + str(ref_count(b)))
+print("c: " + str(c) + " | " + str(ref_count(c)))
+print("d: " + str(d) + " | " + str(ref_count(d)))
 
 print("a.dot(b): " + str(a.dot(b)))

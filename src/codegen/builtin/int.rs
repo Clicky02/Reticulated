@@ -35,6 +35,7 @@ impl<'ctx> CodeGen<'ctx> {
     ) -> Result<(), GenError> {
         self.build_free_ptr_fn(INT_ID, primitive_unalloc, env)?;
         self.build_copy_ptr_fn(INT_ID, env)?;
+        self.build_get_reference_count_fn(INT_ID, env)?;
 
         // Binary
         self.setup_int_add_int(env)?;

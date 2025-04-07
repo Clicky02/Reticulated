@@ -4,7 +4,7 @@ use super::{
     builtin::llvm_resources::LLVMResources,
     env::{
         func::Scope,
-        id::{FunctionId, TypeId, NONE_ID},
+        id::{FunctionId, TypeId, INT_ID, NONE_ID},
         Environment,
     },
     err::GenError,
@@ -13,6 +13,7 @@ use super::{
 
 pub const FREE_PTR_IDENT: &str = "$freeptr";
 pub const COPY_PTR_IDENT: &str = "$copyptr";
+pub const RCOUNT_IDENT: &str = "$ref_count";
 
 impl<'ctx> CodeGen<'ctx> {
     pub(super) fn call_func(
@@ -183,6 +184,36 @@ impl<'ctx> CodeGen<'ctx> {
 
         let none = self.build_none(env)?;
         self.builder.build_return(Some(&none))?;
+
+        Ok(())
+    }
+
+    pub(super) fn build_get_reference_count_fn(
+        &mut self,
+        tid: TypeId,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(), GenError> {
+        let (fn_val, ..) = env.create_func(Some(tid), RCOUNT_IDENT, &[tid], INT_ID, false)?;
+        let entry = self.ctx.append_basic_block(fn_val, "entry");
+        self.builder.position_at_end(entry);
+
+        let ptr = fn_val.get_nth_param(0).unwrap().into_pointer_value();
+
+        let type_def = tid.get_from(env);
+        let idx = type_def.ink().count_fields() - 1;
+        let ref_count_ptr =
+            self.builder
+                .build_struct_gep(type_def.ink(), ptr, idx, "refcountptr")?;
+
+        let ref_count = self
+            .builder
+            .build_load(self.ctx.i64_type(), ref_count_ptr, "refcount")?
+            .into_int_value();
+
+        self.free_pointer(ptr, tid, env)?;
+
+        let ref_count_struct = self.build_struct(INT_ID.get_from(env).ink(), vec![ref_count.into()])?;
+        self.builder.build_return(Some(&ref_count_struct))?;
 
         Ok(())
     }

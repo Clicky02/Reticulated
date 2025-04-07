@@ -5,13 +5,10 @@ use inkwell::{values::PointerValue, AddressSpace};
 use crate::parser::{BinaryFnOp, BinaryOp, Expression, Primary, UnaryFnOp, UnaryOp};
 
 use super::{
-    builtin::{TO_BOOL_FN, TO_FLOAT_FN, TO_INT_FN, TO_STR_FN},
-    env::{
+    builtin::{TO_BOOL_FN, TO_FLOAT_FN, TO_INT_FN, TO_STR_FN}, env::{
         id::{TypeId, BOOL_ID, FLOAT_ID, INT_ID, STR_ID},
         Environment,
-    },
-    err::GenError,
-    CodeGen,
+    }, err::GenError, util::RCOUNT_IDENT, CodeGen
 };
 
 impl<'ctx> CodeGen<'ctx> {
@@ -73,6 +70,11 @@ impl<'ctx> CodeGen<'ctx> {
                 "int" => env.find_func(TO_INT_FN, param_tids.get(0).copied(), &param_tids)?,
                 "float" => env.find_func(TO_FLOAT_FN, param_tids.get(0).copied(), &param_tids)?,
                 "bool" => env.find_func(TO_BOOL_FN, param_tids.get(0).copied(), &param_tids)?,
+                "ref_count" => env.find_func(
+                    RCOUNT_IDENT,
+                    param_tids.get(0).copied(),
+                    &param_tids,
+                )?,
                 _ => env.find_func(ident, None, &param_tids)?,
             },
             Expression::Access(expr, ident) => {

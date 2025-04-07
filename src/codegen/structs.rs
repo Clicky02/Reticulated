@@ -64,6 +64,7 @@ impl<'ctx> CodeGen<'ctx> {
         // Pointer Functions
         self.build_free_ptr_fn(tid, Self::struct_unalloc, env)?;
         self.build_copy_ptr_fn(tid, env)?;
+        self.build_get_reference_count_fn(tid, env)?;
 
         // Constructor
         self.build_struct_constructor(ident, tid, env)?;
