@@ -47,6 +47,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.setup_int_ge_int(env)?;
         self.setup_int_le_int(env)?;
         self.setup_int_pow_int(env)?;
+        self.setup_int_mod_int(env)?;
 
         // Unary
         self.setup_negate_int(env)?;
@@ -233,6 +234,22 @@ impl<'ctx> CodeGen<'ctx> {
                     gen.builder
                         .build_load(gen.prim_int_type(), result, "final_result")?;
                 Ok(final_result.as_basic_value_enum())
+            },
+            env,
+        )
+    }
+
+    fn setup_int_mod_int(&mut self, env: &mut Environment<'ctx>) -> Result<(), GenError> {
+        self.create_primitive_binary_fn(
+            BinaryFnOp::Modulo.fn_name(),
+            INT_ID,
+            INT_ID,
+            INT_ID,
+            |gen, left, right| {
+                Ok(gen
+                    .builder
+                    .build_int_signed_rem(left.into_int_value(), right.into_int_value(), "int_mod")?
+                    .as_basic_value_enum())
             },
             env,
         )
