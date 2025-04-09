@@ -616,6 +616,14 @@ impl<R: ReadTokens> Parser<R> {
                 self.tokens.advance();
                 Some(BinaryFnOp::Modulo)
             }
+            TokenKind::Operator(OperatorKind::Exponentiate) => {
+                self.tokens.advance();
+                Some(BinaryFnOp::Exponentiate)
+            }
+            TokenKind::Operator(OperatorKind::MatMul) => {
+                self.tokens.advance();
+                Some(BinaryFnOp::MatMul)
+            }
             _ => None,
         }
     }

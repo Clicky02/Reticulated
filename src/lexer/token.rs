@@ -104,6 +104,8 @@ pub enum OperatorKind {
     DivideAssign,
     Modulo,
     ModuloAssign,
+    Exponentiate,
+    MatMul,
 
     Equal,
     NotEqual,
@@ -130,6 +132,8 @@ impl std::fmt::Display for OperatorKind {
             OperatorKind::DivideAssign => write!(f, "/="),
             OperatorKind::Modulo => write!(f, "%"),
             OperatorKind::ModuloAssign => write!(f, "%="),
+            OperatorKind::Exponentiate => write!(f, "**"),
+            OperatorKind::MatMul => write!(f, "@"),
             OperatorKind::Equal => write!(f, "=="),
             OperatorKind::NotEqual => write!(f, "!="),
             OperatorKind::LessThan => write!(f, "<"),

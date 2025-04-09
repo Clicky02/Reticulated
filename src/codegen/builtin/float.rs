@@ -46,6 +46,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.setup_float_lt_float(env)?;
         self.setup_float_ge_float(env)?;
         self.setup_float_le_float(env)?;
+        self.setup_float_pow_float(env, res)?;
 
         // Unary
         self.setup_negate_float(env)?;
@@ -215,6 +216,24 @@ impl<'ctx> CodeGen<'ctx> {
                         "float_le",
                     )?
                     .as_basic_value_enum())
+            },
+            env,
+        )
+    }
+    
+    fn setup_float_pow_float(&mut self, env: &mut Environment<'ctx>, res: &LLVMResources<'ctx>) -> Result<(), GenError> {
+        self.create_primitive_binary_fn(
+            BinaryFnOp::Exponentiate.fn_name(),
+            FLOAT_ID,
+            FLOAT_ID,
+            FLOAT_ID,
+            |gen, left, right| {
+                Ok(gen
+                    .builder
+                    .build_call(res.pow, &[left.into(), right.into()], "float_pow")?
+                    .try_as_basic_value()
+                    .left()
+                    .unwrap())
             },
             env,
         )

@@ -45,6 +45,8 @@ pub enum BinaryFnOp {
     Multiply,
     Divide,
     Modulo,
+    Exponentiate,
+    MatMul,
 }
 
 impl BinaryFnOp {
@@ -61,6 +63,8 @@ impl BinaryFnOp {
             BinaryFnOp::Multiply => "__mul__",
             BinaryFnOp::Divide => "__truediv__",
             BinaryFnOp::Modulo => "__mod__",
+            BinaryFnOp::Exponentiate => "__pow__",
+            BinaryFnOp::MatMul => "__matmul__",
         }
     }
 }

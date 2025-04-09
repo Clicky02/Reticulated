@@ -15,6 +15,7 @@ pub struct LLVMResources<'ctx> {
     pub printf: FunctionValue<'ctx>,
     pub snprintf: FunctionValue<'ctx>,
     pub realloc: FunctionValue<'ctx>,
+    pub pow: FunctionValue<'ctx>,
 }
 
 impl<'ctx> CodeGen<'ctx> {
@@ -66,6 +67,13 @@ impl<'ctx> CodeGen<'ctx> {
         );
         let snprintf = env.module().add_function("snprintf", snprintf_type, None);
 
+        // Add pow
+        let pow_type = self.ctx.f64_type().fn_type(
+            &[self.ctx.f64_type().into(), self.ctx.f64_type().into()],
+            false,
+        );
+        let pow = env.module().add_function("pow", pow_type, None);
+
         // let ptr_type = self.ctx.ptr_type(AddressSpace::default());
         // let fd_type = self.ctx.opaque_struct_type("FILE");
         // let stdin_ptr = env.module.add_global(fd_type, None, "stdin").as_pointer_value();
@@ -80,6 +88,7 @@ impl<'ctx> CodeGen<'ctx> {
             printf,
             snprintf,
             realloc,
+            pow,
         })
     }
 

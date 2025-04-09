@@ -195,6 +195,7 @@ impl<R: ReadSource> Iterator for Lexer<R> {
                 ';' => TokenKind::SemiColon,
                 ':' => TokenKind::Colon,
                 '.' => TokenKind::Period,
+                '@' => TokenKind::Operator(OperatorKind::MatMul),
 
                 '+' => followed_by!(
                     '=' => TokenKind::Operator(OperatorKind::AddAssign),
@@ -207,6 +208,7 @@ impl<R: ReadSource> Iterator for Lexer<R> {
                 ),
                 '*' => followed_by!(
                     '=' => TokenKind::Operator(OperatorKind::MultiplyAssign),
+                    '*' => TokenKind::Operator(OperatorKind::Exponentiate),
                     _ => TokenKind::Operator(OperatorKind::Multiply),
                 ),
                 '/' => followed_by!(
