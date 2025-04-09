@@ -5,10 +5,14 @@ use inkwell::{values::PointerValue, AddressSpace};
 use crate::parser::{BinaryFnOp, BinaryOp, Expression, Primary, UnaryFnOp, UnaryOp};
 
 use super::{
-    builtin::{TO_BOOL_FN, TO_FLOAT_FN, TO_INT_FN, TO_STR_FN}, env::{
+    builtin::{TO_BOOL_FN, TO_FLOAT_FN, TO_INT_FN, TO_STR_FN},
+    env::{
         id::{TypeId, BOOL_ID, FLOAT_ID, INT_ID, STR_ID},
         Environment,
-    }, err::GenError, util::RCOUNT_IDENT, CodeGen
+    },
+    err::GenError,
+    util::RCOUNT_IDENT,
+    CodeGen,
 };
 
 impl<'ctx> CodeGen<'ctx> {
@@ -70,11 +74,9 @@ impl<'ctx> CodeGen<'ctx> {
                 "int" => env.find_func(TO_INT_FN, param_tids.get(0).copied(), &param_tids)?,
                 "float" => env.find_func(TO_FLOAT_FN, param_tids.get(0).copied(), &param_tids)?,
                 "bool" => env.find_func(TO_BOOL_FN, param_tids.get(0).copied(), &param_tids)?,
-                "ref_count" => env.find_func(
-                    RCOUNT_IDENT,
-                    param_tids.get(0).copied(),
-                    &param_tids,
-                )?,
+                "ref_count" => {
+                    env.find_func(RCOUNT_IDENT, param_tids.get(0).copied(), &param_tids)?
+                }
                 _ => env.find_func(ident, None, &param_tids)?,
             },
             Expression::Access(expr, ident) => {
@@ -154,6 +156,18 @@ impl<'ctx> CodeGen<'ctx> {
         let (left_ptr, left_tid) = self.compile_expression(left, env)?;
         let (right_ptr, right_tid) = self.compile_expression(right, env)?;
 
+        self.build_binary_fn(left_ptr, left_tid, op, right_ptr, right_tid, env)
+    }
+
+    pub fn build_binary_fn(
+        &mut self,
+        left_ptr: PointerValue<'ctx>,
+        left_tid: TypeId,
+        op: &BinaryFnOp,
+        right_ptr: PointerValue<'ctx>,
+        right_tid: TypeId,
+        env: &mut Environment<'ctx>,
+    ) -> Result<(PointerValue<'ctx>, TypeId), GenError> {
         let op_func_name = op.fn_name();
         let op_func_id = env.find_func(op_func_name, Some(left_tid), &[left_tid, right_tid])?;
 

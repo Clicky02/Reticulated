@@ -58,7 +58,7 @@ impl<R: ReadTokens> Parser<R> {
         let statement = match next.kind {
             TokenKind::Identifier(_) => match self.tokens.peek(1).kind {
                 TokenKind::Colon => self.declaration().parsing_ctx("declaration", pos)?,
-                TokenKind::Operator(OperatorKind::Assign) => {
+                TokenKind::Operator(op) if op.is_assign_op() => {
                     self.assignment().parsing_ctx("assignment", pos)?
                 }
                 _ => self.expr_statement().parsing_ctx("expression", pos)?,
@@ -95,20 +95,20 @@ impl<R: ReadTokens> Parser<R> {
         // assignment -> access "=" expression
 
         let expr = self.expression()?;
+        let assign_op = self.match_assign_op();
 
-        if self.tokens.check(TokenKind::Operator(OperatorKind::Assign)) {
-            let op = self.tokens.advance().unwrap();
-
+        if let Some((token, op)) = assign_op {
             if let Expression::Access(expr, ident) = expr {
                 let rvalue = self.expression()?;
                 Ok(Statement::Assignment {
                     lvalue: LValue::Access(expr, ident),
+                    op,
                     expression: rvalue,
                 })
             } else {
                 Err(anyhow!(
                     "Expected identifier or access at {}, found expression ({:?}) instead.",
-                    op.span,
+                    token.span,
                     expr
                 ))
             }
@@ -141,11 +141,12 @@ impl<R: ReadTokens> Parser<R> {
         // assignment -> IDENTIFIER "=" expression
 
         let identifier = self.tokens.expect_identifier()?;
-        self.tokens.expect_operator(OperatorKind::Assign)?;
+        let (_, op) = self.match_assign_op().unwrap();
         let expression = self.expression()?;
 
         Ok(Statement::Assignment {
             lvalue: LValue::Ident(identifier),
+            op,
             expression,
         })
     }
@@ -547,6 +548,30 @@ impl<R: ReadTokens> Parser<R> {
             TokenKind::Operator(OperatorKind::Or) => {
                 self.tokens.advance();
                 Some(BinaryOp::Or)
+            }
+            _ => None,
+        }
+    }
+
+    fn match_assign_op(&mut self) -> Option<(Token, AssignOp)> {
+        match self.tokens.peek_next().kind {
+            TokenKind::Operator(OperatorKind::Assign) => {
+                Some((self.tokens.advance().unwrap(), AssignOp::Assign))
+            }
+            TokenKind::Operator(OperatorKind::AddAssign) => {
+                Some((self.tokens.advance().unwrap(), AssignOp::AddAssign))
+            }
+            TokenKind::Operator(OperatorKind::SubtractAssign) => {
+                Some((self.tokens.advance().unwrap(), AssignOp::SubtractAssign))
+            }
+            TokenKind::Operator(OperatorKind::MultiplyAssign) => {
+                Some((self.tokens.advance().unwrap(), AssignOp::MultiplyAssign))
+            }
+            TokenKind::Operator(OperatorKind::DivideAssign) => {
+                Some((self.tokens.advance().unwrap(), AssignOp::DivideAssign))
+            }
+            TokenKind::Operator(OperatorKind::ModuloAssign) => {
+                Some((self.tokens.advance().unwrap(), AssignOp::ModuloAssign))
             }
             _ => None,
         }

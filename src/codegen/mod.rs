@@ -138,7 +138,11 @@ impl<'ctx> CodeGen<'ctx> {
 
                 env.insert_var(identifier.clone(), var_ptr, expr_tid);
             }
-            Statement::Assignment { lvalue, expression } => {
+            Statement::Assignment {
+                lvalue,
+                op,
+                expression,
+            } => {
                 let (var_ptr, var_tid) = match lvalue {
                     LValue::Ident(id) => env.get_var(id)?,
                     LValue::Access(expr, ident) => {
@@ -146,15 +150,35 @@ impl<'ctx> CodeGen<'ctx> {
                         self.build_gep_field(expr_ptr, expr_tid, ident, env)?
                     }
                 };
+                let var_val_ptr = self
+                    .builder
+                    .build_load(
+                        self.ctx.ptr_type(AddressSpace::default()),
+                        var_ptr,
+                        "var_val_ptr",
+                    )?
+                    .into_pointer_value();
 
                 let (expr_ptr, expr_tid) = self.compile_expression(expression, env)?;
+                let assign_op = op.to_binary_op();
 
-                let old_expr_ptr = self.builder.build_load(
-                    self.ctx.ptr_type(AddressSpace::default()),
-                    var_ptr,
-                    "prev_expr_ptr",
-                )?;
-                self.free_pointer(old_expr_ptr.into_pointer_value(), var_tid, env)?;
+                let (expr_ptr, expr_tid) = match assign_op {
+                    Some(op) => {
+                        self.copy_pointer(var_val_ptr, var_tid, env)?;
+                        let (new_expr_ptr, new_expr_tid) = self.build_binary_fn(
+                            var_val_ptr,
+                            var_tid,
+                            &op,
+                            expr_ptr,
+                            expr_tid,
+                            env,
+                        )?;
+                        (new_expr_ptr, new_expr_tid)
+                    }
+                    None => (expr_ptr, expr_tid),
+                };
+
+                self.free_pointer(var_val_ptr, var_tid, env)?;
 
                 assert_eq!(var_tid, expr_tid); // TODO: Gen Error
 

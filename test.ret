@@ -1,1 +1,10 @@
-print(str(3 ** 10))
+a: int = 3
+print(str(a))
+a += 3
+print(str(a))
+a -= 3
+print(str(a))
+a *= 3
+print(str(a))
+a /= 3
+print(str(a))

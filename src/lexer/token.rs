@@ -90,7 +90,7 @@ impl std::fmt::Display for LiteralKind {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum OperatorKind {
     Assign,
 
@@ -116,6 +116,20 @@ pub enum OperatorKind {
     And,
     Or,
     Not,
+}
+
+impl OperatorKind {
+    pub fn is_assign_op(&self) -> bool {
+        match self {
+            OperatorKind::Assign
+            | OperatorKind::AddAssign
+            | OperatorKind::SubtractAssign
+            | OperatorKind::MultiplyAssign
+            | OperatorKind::DivideAssign
+            | OperatorKind::ModuloAssign => true,
+            _ => false,
+        }
+    }
 }
 
 impl std::fmt::Display for OperatorKind {

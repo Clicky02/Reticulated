@@ -1,4 +1,4 @@
-use super::Expression;
+use super::{BinaryFnOp, Expression};
 
 #[derive(Debug)]
 pub enum LValue {
@@ -15,6 +15,7 @@ pub enum Statement {
     },
     Assignment {
         lvalue: LValue,
+        op: AssignOp,
         expression: Expression,
     },
     FunctionDeclaration(FuncDeclaration),
@@ -85,6 +86,29 @@ impl FuncParameter {
             identifier,
             type_identifier,
             var_args,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum AssignOp {
+    Assign,
+    SubtractAssign,
+    AddAssign,
+    MultiplyAssign,
+    DivideAssign,
+    ModuloAssign,
+}
+
+impl AssignOp {
+    pub fn to_binary_op(&self) -> Option<BinaryFnOp> {
+        match self {
+            AssignOp::Assign => None,
+            AssignOp::SubtractAssign => Some(BinaryFnOp::Subtract),
+            AssignOp::AddAssign => Some(BinaryFnOp::Add),
+            AssignOp::MultiplyAssign => Some(BinaryFnOp::Multiply),
+            AssignOp::DivideAssign => Some(BinaryFnOp::Divide),
+            AssignOp::ModuloAssign => Some(BinaryFnOp::Modulo),
         }
     }
 }
