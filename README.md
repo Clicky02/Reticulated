@@ -69,22 +69,23 @@ In no specific order:
 -   [x] Create example code
 -   [x] Implement lexer
 -   [x] Implement parser
--   [ ] Integrate with LLVM for code generation
+-   [x] Integrate with LLVM for code generation
 
 ### Additional Functionality
 
 -   [ ] More language features
     -   [ ] Comments
-    -   [ ] While loop
+    -   [x] While loop
     -   [ ] For Loop
     -   [ ] First-class functions
-    -   [ ] Structs/classes
+    -   [x] Structs
+    -   [ ] Classes/Inheritance/Polymorphism
     -   [ ] Imports
     -   [ ] List Comprehensions
     -   [ ] Dictionay Comprehensions
     -   [ ] Lambda functions
     -   [ ] Contexts
--   [ ] Implement type checker
+-   [x] Implement type checker
 -   [ ] Basic Standard Library Features
 -   [ ] Write documentation
 -   [ ] Create test suite

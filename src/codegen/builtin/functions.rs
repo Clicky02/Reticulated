@@ -158,6 +158,8 @@ impl<'ctx> CodeGen<'ctx> {
 
         self.builder.position_at_end(return_block);
 
+        self.builder.build_call(res.getchar, &[], "newline_char")?;
+
         let final_size = self
             .builder
             .build_int_cast(new_size, self.prim_int_type(), "str_size")?;
@@ -166,5 +168,4 @@ impl<'ctx> CodeGen<'ctx> {
 
         Ok(())
     }
-
 }

@@ -1,1 +1,2 @@
-print(str(5 % 3))
+name: str = input("What is your name")
+print("Hello, " + name + "!")

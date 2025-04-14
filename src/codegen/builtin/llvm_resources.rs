@@ -10,7 +10,7 @@ pub struct LLVMResources<'ctx> {
     pub cstr_format_spec: PointerValue<'ctx>,
 
     pub scanf: FunctionValue<'ctx>,
-    pub get_char: FunctionValue<'ctx>,
+    pub getchar: FunctionValue<'ctx>,
     pub sscanf: FunctionValue<'ctx>,
     pub printf: FunctionValue<'ctx>,
     pub snprintf: FunctionValue<'ctx>,
@@ -47,7 +47,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         // Add getchar
         let get_char_type = self.ctx.i32_type().fn_type(&[], false);
-        let get_char = env.module().add_function("get_char", get_char_type, None);
+        let get_char = env.module().add_function("getchar", get_char_type, None);
 
         // Add sscanf
         let sscanf_type = self
@@ -83,7 +83,7 @@ impl<'ctx> CodeGen<'ctx> {
             cstr_format_spec,
 
             scanf,
-            get_char,
+            getchar: get_char,
             sscanf,
             printf,
             snprintf,

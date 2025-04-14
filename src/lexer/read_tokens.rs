@@ -16,7 +16,7 @@ pub trait ReadTokens: Read<Token> {
                     next_token.kind,
                     next_token.span.start,
                     kind
-                )) // TODO: Real error, better formatting
+                ))
             }
         } else {
             Err(anyhow!("Unexpected end of input."))

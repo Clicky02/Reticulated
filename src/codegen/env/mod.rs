@@ -139,7 +139,6 @@ impl<'ctx> Environment<'ctx> {
         param_tids: &[TypeId],
     ) -> Result<FunctionId, GenError> {
         let fn_name = self.create_fn_name(ident, owner, param_tids);
-        dbg!(&fn_name);
 
         self.fn_ids
             .get(&fn_name)
